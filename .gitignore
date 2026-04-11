@@ -1,0 +1,86 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Production
+/frontend/dist/
+/dist
+/build
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Backups & Temp (Recursive Exclusion)
+**/bck/
+**/backup/
+**/BACKUP_REF/
+manual_backups/
+backup/
+tmp/
+*.tmp
+*.log
+tmp_err.txt
+audit_output.txt
+test_out.txt
+
+# Databases
+backend/database/*.db
+backend/database/*.db-journal
+backend/database/*.sqlite
+backend/nexus.db
+backend/logos.db
+
+# Generated User Data & Memory
+backend/data/persona_memory/
+backend/data/mempalace/
+backend/audio_cache/
+backend/data/relationships.json
+backend/data/scenarios.json
+backend/chats/
+backend/uploads/
+.agent/
+backend/mocks/
+backend/comfyui/workflows/lightning_uncensored.json
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific
+/backend/output/
+/frontend/node_modules/
+/backend/node_modules/
+
+# Internal development docs (private)
+docs/archives/
+docs/specs/
+
+# Dev-only scripts
+backend/scripts/add_test_personas.js
+backend/scripts/sync_registry.js
+
+backend/data/model_registry.json
+
+backend/data/personas.json
+
+backend/data/identity_memory.json
