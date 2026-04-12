@@ -88,6 +88,35 @@ export const agentToolsSchema = [
     {
         type: "function",
         function: {
+            name: "writeFileTool",
+            description: "Write content to a file. Useful for creating or updating code files.",
+            parameters: {
+                type: "object",
+                properties: {
+                    filePath: { type: "string", description: "Relative path to the file" },
+                    content: { type: "string", description: "Content to write" }
+                },
+                required: ["filePath", "content"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "pythonExecTool",
+            description: "Execute Python code and return the output. Useful for data analysis or complex calculations.",
+            parameters: {
+                type: "object",
+                properties: {
+                    code: { type: "string", description: "The Python code to execute" }
+                },
+                required: ["code"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
             name: "readFileTool",
             description: "Read the UTF-8 text contents of a file to analyze code.",
             parameters: {
@@ -148,7 +177,36 @@ export const agentToolsSchema = [
 export const ToolRegistry = {
     "executeCommand": executeCommand,
     "readFileTool": readFileTool,
+    "writeFileTool": writeFileTool,
     "listDirTool": listDirTool,
+    "pythonExecTool": pythonExecTool,
     "mempalaceSearch": mempalaceSearch,
     "mempalaceDiaryWrite": mempalaceDiaryWrite
 };
+
+export async function writeFileTool({ filePath, content }) {
+    console.log(`🤖 AGENT TOOL: Writing file [${filePath}]`);
+    try {
+        const fullPath = path.resolve(APP_ROOT, filePath);
+        // Ensure directory exists
+        await fs.mkdir(path.dirname(fullPath), { recursive: true });
+        await fs.writeFile(fullPath, content, "utf8");
+        return { success: true, message: `File written to ${filePath}` };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function pythonExecTool({ code }) {
+    console.log(`🤖 AGENT TOOL: Executing Python Code`);
+    const tmpFile = path.join(APP_ROOT, `tmp_agent_${Date.now()}.py`);
+    try {
+        await fs.writeFile(tmpFile, code);
+        const { stdout, stderr } = await execAsync(`python "${tmpFile}"`);
+        return { success: true, stdout: stdout.trim(), stderr: stderr.trim() };
+    } catch (e) {
+        return { success: false, error: e.message };
+    } finally {
+        try { await fs.unlink(tmpFile); } catch(e) {}
+    }
+}

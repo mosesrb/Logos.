@@ -1,4 +1,6 @@
 import { executeAgenticTask } from "./services/agentService.js";
+import { listLocalModels, pullModel, deleteModel } from "./services/ollamaService.js";
+import { encrypt, decrypt } from "./utils/encryption.js";
 import "dotenv/config";
 import express from "express";
 import { routeModel, buildHybridOptions, getModelRegistry, getModelTier } from "./modelRouter.js";
@@ -296,7 +298,11 @@ function saveSessionToDisk(sessionId) {
   const s = sessions[sessionId];
   if (!s) return;
   try {
-    fs.writeFileSync(getChatPath(sessionId), JSON.stringify(s, null, 2), "utf8");
+    let content = JSON.stringify(s, null, 2);
+    if (encryptionKey) {
+      content = encrypt(content, encryptionKey);
+    }
+    fs.writeFileSync(getChatPath(sessionId), content, "utf8");
     // NEW: Sync to SQLite
     syncSession(s).catch(e => console.error("❌ SQLITE_SYNC_SESSION_ERROR:", e.message));
     if (s.messages && s.messages.length > 0) {
@@ -743,7 +749,14 @@ function ensureSession(sessionId) {
     const p = getChatPath(sessionId);
     if (fs.existsSync(p)) {
       try {
-        const raw = fs.readFileSync(p, "utf8");
+        let raw = fs.readFileSync(p, "utf8");
+        if (encryptionKey && raw.includes(':')) {
+           try {
+             raw = decrypt(raw, encryptionKey);
+           } catch(decrError) {
+             console.error("❌ Decryption failed for session:", sessionId);
+           }
+        }
         sessions[sessionId] = JSON.parse(raw);
         return sessions[sessionId];
       } catch (e) {}
@@ -932,6 +945,61 @@ app.post("/api/chat/action/generate-title", async (req, res) => {
       title += chunk;
     }, [], null, { skipRouting: true });
     res.json({ title: title.trim().replace(/["']/g, "").slice(0, 40) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ------------------ PRIVACY & ENCRYPTION ------------------
+let encryptionKey = process.env.ENCRYPTION_KEY || null;
+
+app.get("/api/privacy/status", (req, res) => {
+  res.json({ encrypted: !!encryptionKey });
+});
+
+app.post("/api/privacy/encrypt", (req, res) => {
+  const { key } = req.body;
+  if (!key) return res.status(400).json({ error: "Key required" });
+  encryptionKey = key;
+  // In a real scenario, we would re-encrypt existing files here.
+  // For this preliminary step, we just set the key for future sessions.
+  res.json({ success: true });
+});
+
+// ------------------ OLLAMA MODEL MANAGEMENT ------------------
+app.get("/api/ollama/models", async (req, res) => {
+  try {
+    const models = await listLocalModels();
+    res.json(models);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/ollama/pull", async (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: "Model name is required" });
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  try {
+    await pullModel(name, (status) => {
+      res.write(`data: ${JSON.stringify(status)}\n\n`);
+    });
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch (e) {
+    res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`);
+    res.end();
+  }
+});
+
+app.delete("/api/ollama/models/:name", async (req, res) => {
+  try {
+    await deleteModel(req.params.name);
+    res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

@@ -11,6 +11,8 @@ const ChatSidebar = ({
   deleteFile,
   setShowUserProfile,
   setShowPersonaForge,
+  setShowModelManager,
+  setShowPrivacyDashboard,
   sidebarWidth
 }) => {
   return (
@@ -59,6 +61,12 @@ const ChatSidebar = ({
           </button>
           <button className="sidebar-btn" onClick={() => setShowPersonaForge(true)}>
             ⚒️ Persona Forge
+          </button>
+          <button className="sidebar-btn" onClick={() => setShowModelManager(true)}>
+            📦 Model Manager
+          </button>
+          <button className="sidebar-btn" onClick={() => setShowPrivacyDashboard(true)}>
+            🔒 Privacy & Data
           </button>
         </div>
       </div>

@@ -16,6 +16,8 @@ import SystemHUD from './components/SystemHUD.jsx';
 import MetricsPanel from './components/MetricsPanel.jsx';
 import IcarusToolBelt from './components/IcarusToolBelt.jsx';
 import NeuralDatabaseManager from './components/NeuralDatabaseManager.jsx';
+import ModelManager from './components/Modals/ModelManager.jsx';
+import PrivacyDashboard from './components/Modals/PrivacyDashboard.jsx';
 import AgentDesk from './components/AgentDesk.jsx';
 
 
@@ -143,6 +145,8 @@ export default function App() {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [mapHasMoved, setMapHasMoved] = useState(false);
   const [showDbManager, setShowDbManager] = useState(false);
+  const [showModelManager, setShowModelManager] = useState(false);
+  const [showPrivacyDashboard, setShowPrivacyDashboard] = useState(false);
   const [logs, setLogs] = useState([]);
   const messagesEndRef = useRef(null);
   const terminalEndRef = useRef(null);
@@ -1772,6 +1776,8 @@ export default function App() {
           deleteFile={deleteFile}
           setShowUserProfile={setShowUserProfile}
           setShowPersonaForge={setShowPersonaForge}
+          setShowModelManager={setShowModelManager}
+          setShowPrivacyDashboard={setShowPrivacyDashboard}
           sidebarWidth={sidebarWidth}
         />
       )}
@@ -2007,6 +2013,16 @@ export default function App() {
       {/* --- NEURAL_DATA_ARCHITECT (SQLite CRUD) --- */}
       {showDbManager && (
         <NeuralDatabaseManager onClose={() => setShowDbManager(false)} API={API} />
+      )}
+
+      {/* --- OLLAMA MODEL MANAGER --- */}
+      {showModelManager && (
+        <ModelManager onClose={() => setShowModelManager(false)} API_BASE={API_BASE} />
+      )}
+
+      {/* --- PRIVACY & DATA DASHBOARD --- */}
+      {showPrivacyDashboard && (
+        <PrivacyDashboard onClose={() => setShowPrivacyDashboard(false)} API={API} addLog={addLog} />
       )}
     </div>
   );
