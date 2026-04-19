@@ -1,0 +1,89 @@
+{
+  "3": {
+    "inputs": {
+      "seed": 42,
+      "steps": 20,
+      "cfg": 1,
+      "sampler_name": "euler_ancestral",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [ "10", 0 ],
+      "positive": [ "6", 0 ],
+      "negative": [ "7", 0 ],
+      "latent_image": [ "5", 0 ]
+    },
+    "class_type": "KSampler",
+    "_meta": { "title": "KSampler" }
+  },
+  "5": {
+    "inputs": { "width": 768, "height": 768, "batch_size": 1 },
+    "class_type": "EmptyLatentImage",
+    "_meta": { "title": "Empty Latent Image" }
+  },
+  "6": {
+    "inputs": {
+      "text": "a photorealistic portrait of a person",
+      "clip": [ "30", 0 ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "CLIP Text Encode (Positive Prompt)" }
+  },
+  "7": {
+    "inputs": { "text": "blurry, low quality, distorted", "clip": [ "30", 0 ] },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "CLIP Text Encode (Negative Prompt)" }
+  },
+  "8": {
+    "inputs": { "samples": [ "3", 0 ], "vae": [ "29", 0 ] },
+    "class_type": "VAEDecode",
+    "_meta": { "title": "VAE Decode" }
+  },
+  "9": {
+    "inputs": { "filename_prefix": "ComfyUI", "images": [ "8", 0 ] },
+    "class_type": "SaveImage",
+    "_meta": { "title": "Save Image" }
+  },
+  "10": {
+    "inputs": {
+      "weight": 0.8,
+      "weight_type": "standard",
+      "combine_embeds": "concat",
+      "start_at": 0,
+      "end_at": 1,
+      "embeds_scaling": "V only",
+      "model": [ "28", 0 ],
+      "ipadapter": [ "11", 0 ],
+      "image": [ "15", 0 ]
+    },
+    "class_type": "IPAdapter",
+    "_meta": { "title": "IPAdapter" }
+  },
+  "11": {
+    "inputs": { "ipadapter_file": "ip-adapter-plus_sdxl_vit-h.safetensors" },
+    "class_type": "IPAdapterModelLoader",
+    "_meta": { "title": "IPAdapter Model Loader" }
+  },
+  "15": {
+    "inputs": { "image": "persona_ref.png", "upload": "image" },
+    "class_type": "LoadImage",
+    "_meta": { "title": "Load Persona Reference" }
+  },
+  "28": {
+    "inputs": { 
+      "unet_name": "z_image_turbo_bf16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": { "title": "UNET Loader (Z-Image-Turbo)" }
+  },
+  "29": {
+    "inputs": { "vae_name": "ae.safetensors" },
+    "class_type": "VAELoader",
+    "_meta": { "title": "VAE Loader" }
+  },
+  "30": {
+    "inputs": { "clip_name": "qwen_3_4b.safetensors", "type": "lumina2" },
+    "class_type": "CLIPLoader",
+    "_meta": { "title": "CLIP Loader (Qwen)" }
+  }
+}
