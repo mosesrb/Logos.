@@ -13,8 +13,8 @@
 - Summary generated.
 - Memory stored in database.
 
-![Logos AI Demo](docs/assets/demo.gif)
-*(Add screenshot or GIF)*
+## 🎬 Demo
+![LÓGOS AI Chat Interface](docs/assets/demo.png)
 
 ## ⚡ Quick Start
 
