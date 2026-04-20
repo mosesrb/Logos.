@@ -24,6 +24,7 @@ backend/mocks/
 
 # Backend Data & Memory (Strictly Local)
 backend/data/*.db
+backend/database/*.db
 backend/data/*.db-journal
 backend/data/*.sqlite
 backend/data/*.json
