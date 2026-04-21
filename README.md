@@ -4,14 +4,7 @@
 
 🚀 Run a private local AI system with persistent episodic memory and autonomous tool execution.
 
-## 🎬 Example
 
-**Input:** "Summarize this PDF"
-
-**Output:**
-- Tool executes (Reads PDF).
-- Summary generated.
-- Memory stored in database.
 
 ## 🎬 Demo
 ![LÓGOS AI Chat Interface](docs/assets/demo.png)
