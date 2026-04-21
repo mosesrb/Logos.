@@ -1,4 +1,7 @@
-# 🧠 LÓGOS AI
+<h1 align="left">
+  <img src="docs/assets/logos_ai.png" alt="LÓGOS AI Logo" width="48" height="48" style="vertical-align: middle; margin-right: 10px;">
+  <span style="vertical-align: middle;">LÓGOS AI</span>
+</h1>
 
 ![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
 
@@ -36,6 +39,13 @@ npm run start    # Launches the local command center
 ## 🛠️ Unified Orchestration
 
 LÓGOS isn't just a frontend; it's a multi-modal orchestrator.
+
+```mermaid
+graph TD;
+    UI[Agent Desk Frontend] --> Core[LÓGOS Logic Engine];
+    Core --> Tools[Action / Tools Layer];
+    Core --> Memory[(SQLite Persistent DB)];
+```
 
 ### 🏛️ The Memory Palace (SQLite)
 Privacy doesn't have to mean amnesia. LÓGOS uses an isolated **SQLite persistence layer** to track:
