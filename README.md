@@ -1,7 +1,4 @@
-<h1 align="left">
-  <img src="docs/assets/logos_ai.png" alt="LÓGOS AI Logo" width="48" height="48" style="vertical-align: middle; margin-right: 10px;">
-  <span style="vertical-align: middle;">LÓGOS AI</span>
-</h1>
+# 🧠 LÓGOS AI
 
 ![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
 
@@ -22,6 +19,10 @@ Standard AI chats are stateless and forget you as soon as the session ends. **L�
    - Summarizes changes using a local Ollama model.
    - Orchestrates a ComfyUI prompt to generate the visual.
    - Stores the context in the **Memory Palace (SQLite)** for future reference.
+
+## 🎬 How it Looks
+
+![LÓGOS AI Interface](docs/assets/logos_ai.png)
 
 ---
 
