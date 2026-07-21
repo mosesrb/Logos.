@@ -1,7 +1,7 @@
 // backend/runModelWorker.js
 import { parentPort, workerData } from "worker_threads";
 
-const { model, messages, ollamaUrl = "http://localhost:11434/api/chat" } = workerData;
+const { model, messages, ollamaUrl = (process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434") + "/api/chat" } = workerData;
 
 async function run() {
   try {

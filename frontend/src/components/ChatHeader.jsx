@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import SolarisIcon from './SolarisIcon';
 
 const MODE_GUIDE = [
   { id: 'Normal', label: 'SINGLE_SYNC', desc: 'Standard 1:1 interaction with a single persona.' },
@@ -60,8 +61,9 @@ const ChatHeader = ({
   setActiveView,
 }) => {
   const [showModeInfo, setShowModeInfo] = useState(false);
+
   return (
-    <div className="chat-header">
+    <div className="chat-header glass-panel">
       <div className="header-row">
         {/* ── MODULE: SESSION ── */}
         <div className="header-module" style={{ position: 'relative' }}>
@@ -72,12 +74,12 @@ const ChatHeader = ({
               onMouseEnter={() => setShowModeInfo(true)}
               onMouseLeave={() => setShowModeInfo(false)}
             >
-              ⓘ
+              <SolarisIcon icon="more" size={10} />
             </span>
           </div>
 
           {showModeInfo && (
-            <div className="mode-info-popover h-glow">
+            <div className="mode-info-popover glass-panel">
               <div className="popover-header">SYNAPSE_PROTOCOLS // QUICK_REF</div>
               <div className="popover-grid">
                 {MODE_GUIDE.map(item => (
@@ -96,6 +98,7 @@ const ChatHeader = ({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '140px' }}>
             <select
               className="mode-select"
+              aria-label="Interaction Mode"
               value={interactionMode}
               onChange={(e) => { 
                 const val = e.target.value; 
@@ -114,7 +117,8 @@ const ChatHeader = ({
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              maxWidth: '180px'
+              maxWidth: '180px',
+              fontFamily: 'var(--font-mono)'
             }}>
               {MODE_DESCRIPTIONS[interactionMode]}
             </span>
@@ -127,10 +131,13 @@ const ChatHeader = ({
             <span className="module-label">PERSONA</span>
             <div className="control-group">
               <button className="model-picker-btn" onClick={() => setShowModelDropdown((s) => !s)}>
-                {selectedPersonaId ? (personas.find(p => p.id === selectedPersonaId)?.name || "Selected") : "Select Persona"} ▾
+                <span className="btn-label">
+                  {selectedPersonaId ? (personas.find(p => p.id === selectedPersonaId)?.name || "Selected") : "Select Persona"}
+                </span>
+                <SolarisIcon icon="minimize" size={10} style={{ transform: 'rotate(-90deg)', opacity: 0.5 }} />
               </button>
               {showModelDropdown && (
-                <div className="model-dropdown">
+                <div className="model-dropdown glass-panel">
                   <div
                     className={`model-dropdown-item${!selectedPersonaId ? ' active' : ''}`}
                     onClick={() => { setSelectedPersonaId(""); setShowModelDropdown(false); }}
@@ -138,7 +145,12 @@ const ChatHeader = ({
                     — None —
                   </div>
                   {personas
-                    .filter(p => !p.availableModes || p.availableModes.length === 0 || p.availableModes.includes(interactionMode))
+                    .filter(p => {
+                      if (!p.availableModes || p.availableModes.length === 0) return true;
+                      // Agent mode uses Normal-mode personas (legacy personas don't have "Agent" in their list)
+                      const checkMode = interactionMode === 'Agent' ? 'Normal' : interactionMode;
+                      return p.availableModes.includes(interactionMode) || p.availableModes.includes(checkMode);
+                    })
                     .map((p) => (
                       <div
                         key={p.id}
@@ -154,8 +166,9 @@ const ChatHeader = ({
               )}
             </div>
             {selectedPersonaId && currentSession && (
-              <div className="relationship-status-badge" style={{ fontSize: '9px', padding: '2px 6px', borderRadius: '4px', marginLeft: '0px' }}>
-                🤝 {(() => {
+              <div className="relationship-status-badge">
+                <SolarisIcon icon="user" size={8} style={{ marginRight: '4px' }} />
+                {(() => {
                   const trust = currentSession.relationship?.trust || 0.5;
                   if (trust > 0.8) return "Close";
                   if (trust > 0.6) return "Comfortable";
@@ -182,7 +195,7 @@ const ChatHeader = ({
                   className="mood-ring-inner"
                 />
               </svg>
-              <span className="mood-label" style={{ fontSize: '10px' }}>{personaMood.label}</span>
+              <span className="mood-label" style={{ fontSize: '10px', color: 'var(--solaris-gold)', fontFamily: 'var(--font-mono)' }}>{personaMood.label}</span>
             </div>
           </div>
         )}
@@ -193,12 +206,17 @@ const ChatHeader = ({
             <span className="module-label">PERSONAS</span>
             <div className="control-group">
               <button className="model-picker-btn" onClick={() => setShowModelDropdown((s) => !s)}>
-                {selectedPersonaIds.length} selected ▾
+                <span className="btn-label">{selectedPersonaIds.length} selected</span>
+                <SolarisIcon icon="minimize" size={10} style={{ transform: 'rotate(-90deg)', opacity: 0.5 }} />
               </button>
               {showModelDropdown && (
-                <div className="model-dropdown">
+                <div className="model-dropdown glass-panel">
                   {personas
-                    .filter(p => !p.availableModes || p.availableModes.length === 0 || p.availableModes.includes(interactionMode))
+                    .filter(p => {
+                      if (!p.availableModes || p.availableModes.length === 0) return true;
+                      const checkMode = interactionMode === 'Agent' ? 'Normal' : interactionMode;
+                      return p.availableModes.includes(interactionMode) || p.availableModes.includes(checkMode);
+                    })
                     .map((p) => (
                       <label key={p.id} className={`model-dropdown-item${selectedPersonaIds.includes(p.id) ? ' active' : ''}`}>
                         <input type="checkbox" checked={selectedPersonaIds.includes(p.id)} onChange={() => togglePersonaSelection(p.id)} /> {p.name}
@@ -217,7 +235,7 @@ const ChatHeader = ({
           <div className="header-module">
             <span className="module-label">TURNS</span>
             <div className="control-group">
-              <select value={debateTurns} onChange={(e) => setDebateTurns(Number(e.target.value))} style={{ height: '24px' }}>
+              <select className="mode-select" aria-label="Debate Turns" value={debateTurns} onChange={(e) => setDebateTurns(Number(e.target.value))} style={{ height: '24px' }}>
                 {DEBATE_TURN_OPTIONS.map((n) => (
                   <option key={n} value={n}>{n}</option>
                 ))}
@@ -234,10 +252,13 @@ const ChatHeader = ({
                 className={`model-picker-btn ${judgePersonaId ? 'active' : ''}`}
                 onClick={() => setShowJudgeDropdown((s) => !s)}
               >
-                {personas.find(p => p.id === judgePersonaId)?.name || "Default (Gemma 4)"} ▾
+                <span className="btn-label">
+                  {personas.find(p => p.id === judgePersonaId)?.name || "Default (Gemma 4)"}
+                </span>
+                <SolarisIcon icon="minimize" size={10} style={{ transform: 'rotate(-90deg)', opacity: 0.5 }} />
               </button>
               {showJudgeDropdown && (
-                <div className="model-dropdown" style={{ minWidth: "160px" }}>
+                <div className="model-dropdown glass-panel" style={{ minWidth: "160px" }}>
                   <label className={`model-dropdown-item ${!judgePersonaId ? 'active' : ''}`}>
                     <input
                       type="radio"
@@ -247,12 +268,7 @@ const ChatHeader = ({
                     />
                     <span>Default (Gemma 4)</span>
                   </label>
-                  <div className="dropdown-divider" style={{
-                    height: '1px',
-                    background: 'var(--border)',
-                    margin: '4px 0',
-                    opacity: 0.3
-                  }} />
+                  <div className="dropdown-divider" />
                   {personas.map((p) => (
                     <label key={p.id} className={`model-dropdown-item ${judgePersonaId === p.id ? 'active' : ''}`}>
                       <input
@@ -288,9 +304,13 @@ const ChatHeader = ({
                 ))}
               </select>
               <div style={{ display: 'flex', gap: '2px' }}>
-                <button className="forge-btn" onClick={() => openScenarioBuilder()} title="New Scenario">+</button>
+                <button className="forge-btn" onClick={() => openScenarioBuilder()} title="New Scenario">
+                  <SolarisIcon icon="send" size={10} style={{ transform: 'rotate(-45deg)' }} />
+                </button>
                 {selectedScenarioId && (
-                  <button className="forge-btn" onClick={() => openScenarioBuilder(scenarios.find(p => p.id === selectedScenarioId))} title="Edit Scenario">⚙️</button>
+                  <button className="forge-btn" onClick={() => openScenarioBuilder(scenarios.find(p => p.id === selectedScenarioId))} title="Edit Scenario">
+                    <SolarisIcon icon="settings" size={10} />
+                  </button>
                 )}
               </div>
             </div>
@@ -299,7 +319,7 @@ const ChatHeader = ({
 
         {/* Simulation Controls Panel */}
         {interactionMode === "Scenario" && selectedScenarioId && (
-          <div className="simulation-controls-hub">
+          <div className="simulation-controls-hub glass-panel">
             <div className="control-group">
               <label className="control-label">Chaos Factor</label>
               <input
@@ -309,22 +329,24 @@ const ChatHeader = ({
                 className="chaos-slider"
               />
             </div>
-            <button className="inject-btn" onClick={() => {
+            <button className="inject-btn commit-glow-btn" style={{ padding: '4px 12px', height: '28px' }} onClick={() => {
               const event = prompt("⚠️ GLOBAL EVENT INJECTION:\nDescribe a world-altering event or narrative shift:");
               if (event) sendMessage(`[NARRATIVE_INTERRUPT]: ${event}`);
             }}>
-              💥 Inject Event
+              <SolarisIcon icon="neural" size={12} />
+              Inject Event
             </button>
-            <button className="sidebar-btn" style={{ padding: '4px 8px', border: '1px solid var(--accent-gold)' }} onClick={handleSnapshot}>
-              🌱 Branch Reality
+            <button className="sidebar-btn commit-glow-btn" style={{ padding: '4px 12px', height: '28px', border: '1px solid var(--solaris-accent)' }} onClick={handleSnapshot}>
+              Branch Reality
             </button>
             <button
-              className="sidebar-btn"
-              style={{ padding: '4px 8px', border: '1px solid var(--cyan)' }}
+              className="sidebar-btn commit-glow-btn"
+              style={{ padding: '4px 12px', height: '28px', border: '1px solid var(--cyan)' }}
               onClick={handleEvaluate}
               disabled={isEvaluating}
             >
-              {isEvaluating ? "⌛ Analyzing..." : "📊 Analyze Narrative"}
+              <SolarisIcon icon="metrics" size={12} />
+              {isEvaluating ? "Analyzing..." : "Analyze Narrative"}
             </button>
           </div>
         )}
@@ -335,23 +357,27 @@ const ChatHeader = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div className={`retina-status ${isVisionModel(selectedModelSingle) ? "ready" : "locked"}`} style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span className="retina-dot"></span>
-              RETINA_{isVisionModel(selectedModelSingle) ? "ACTIVE" : "STANDBY"}
+              <span style={{ color: 'var(--solaris-gold)', letterSpacing: '1px' }}>
+                RETINA_{isVisionModel(selectedModelSingle) ? "ACTIVE" : "STANDBY"}
+              </span>
             </div>
             <div className="brand-unit" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="brand-glyph" style={{ fontFamily: 'Orbitron, monospace', fontSize: '11px', fontWeight: 700, letterSpacing: '2px', color: 'var(--cyan)' }}>LÓGOS</span>
+              <span className="brand-glyph" style={{ fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 700, letterSpacing: '2px', color: 'var(--solaris-gold)' }}>LÓGOS</span>
               <button
-                className={`dark-mode-btn${darkMode ? ' active' : ''}`}
+                className={`dark-mode-btn commit-glow-btn${darkMode ? ' active' : ''}`}
                 onClick={() => setDarkMode(!darkMode)}
-                title={darkMode ? 'Switch to Industrial Mode' : 'Switch to Dark Mode'}
+                style={{ padding: '4px 10px', height: '24px', fontSize: '9px' }}
               >
-                {darkMode ? '☀ LIGHT' : '🌑 DARK'}
+                <SolarisIcon icon="settings" size={10} />
+                {darkMode ? 'LIGHT' : 'DARK'}
               </button>
               <button
-                className={`dark-mode-btn agent-desk-toggle${activeView === 'agent-desk' ? ' active' : ''}`}
+                className={`dark-mode-btn agent-desk-toggle commit-glow-btn${activeView === 'agent-desk' ? ' active' : ''}`}
                 onClick={() => setActiveView(v => v === 'agent-desk' ? 'chat' : 'agent-desk')}
-                title={activeView === 'agent-desk' ? 'Return to Chat' : 'Open Agentic Operations Desk'}
+                style={{ padding: '4px 10px', height: '24px', fontSize: '9px' }}
               >
-                {activeView === 'agent-desk' ? '💬 CHAT' : '⚙️ AGENT_DESK'}
+                <SolarisIcon icon={activeView === 'agent-desk' ? 'chat' : 'agent'} size={10} />
+                {activeView === 'agent-desk' ? 'CHAT' : 'OPERATIONS'}
               </button>
             </div>
           </div>
@@ -363,28 +389,37 @@ const ChatHeader = ({
         <div className="header-module">
           <span className="module-label">NETWORK_CAPABILITIES</span>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <label className="mode-btn retina-btn" style={{ padding: '2px 6px', fontSize: '10px' }}>
-              👁️ RETINA
+            <label className="mode-btn retina-btn commit-glow-btn" style={{ padding: '4px 10px', fontSize: '9px', height: '24px', cursor: 'pointer' }}>
+              <SolarisIcon icon="neural" size={10} />
+              RETINA
               <input type="file" accept="image/*" onChange={handleImageUpload} hidden />
             </label>
-            <div className={`mode-toggle ${webMode ? "active" : ""}`} onClick={() => setWebMode(!webMode)} style={{ fontSize: '10px', padding: '2px 6px' }}>
-              <input type="checkbox" checked={webMode} readOnly />
-              <span>🌐 WEB</span>
+            <div className={`mode-toggle ${webMode ? "active" : ""}`} role="switch" tabIndex={0} aria-checked={webMode} aria-label="Enable web context" onClick={() => setWebMode(!webMode)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setWebMode(!webMode); } }}>
+              <SolarisIcon icon="terminal" size={10} />
+              <span>WEB</span>
             </div>
-            <div className={`mode-toggle ${ragMode ? "active" : ""}`} onClick={() => setRagMode(!ragMode)} style={{ fontSize: '10px', padding: '2px 6px' }}>
-              <input type="checkbox" checked={ragMode} readOnly />
-              <span>📚 RAG</span>
+            <div className={`mode-toggle ${ragMode ? "active" : ""}`} role="switch" tabIndex={0} aria-checked={ragMode} aria-label="Enable retrieval augmented generation" onClick={() => setRagMode(!ragMode)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setRagMode(!ragMode); } }}>
+              <SolarisIcon icon="database" size={10} />
+              <span>RAG</span>
             </div>
             <div
               className={`sticker-label sticker-warning ${unrestrictedMode ? "active" : ""}`}
+              role="switch"
+              tabIndex={0}
+              aria-checked={unrestrictedMode}
+              aria-label="Enable unrestricted mode"
               onClick={() => setUnrestrictedMode(!unrestrictedMode)}
+              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setUnrestrictedMode(!unrestrictedMode); } }}
               style={{
-                fontSize: '7px',
-                padding: '1px 4px',
+                fontSize: '8px',
+                padding: '2px 6px',
                 cursor: 'pointer',
                 opacity: unrestrictedMode ? 1 : 0.4,
-                filter: unrestrictedMode ? 'drop-shadow(0 0 5px var(--orange))' : 'none',
-                transition: 'all 0.2s'
+                filter: unrestrictedMode ? 'drop-shadow(0 0 5px var(--solaris-accent))' : 'none',
+                transition: 'all 0.2s',
+                fontFamily: 'var(--font-display)',
+                border: '1px solid var(--solaris-accent)',
+                color: 'var(--solaris-gold)'
               }}
             >
               UNRESTRICTED
@@ -392,8 +427,8 @@ const ChatHeader = ({
 
             {ragMode && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '8px' }}>
-                <input type="file" accept=".pdf,.txt,.docx" onChange={handleFileUpload} style={{ maxWidth: 120, fontSize: '9px' }} />
-                {uploadStatus && <span className="upload-status" style={{ fontSize: '9px' }}>{uploadStatus}</span>}
+                <input type="file" accept=".pdf,.txt,.docx" onChange={handleFileUpload} style={{ maxWidth: 120, fontSize: '9px', color: 'var(--solaris-gold)' }} />
+                {uploadStatus && <span className="upload-status" style={{ fontSize: '9px', color: 'var(--solaris-accent)' }}>{uploadStatus}</span>}
               </div>
             )}
           </div>

@@ -1,0 +1,281 @@
+/* ╔══════════════════════════════════════════════════════════════╗
+   ║  SOLARIS // NEURAL CONSOLE — VOID & GOLD DESIGN SYSTEM      ║
+   ╚══════════════════════════════════════════════════════════════╝ */
+
+/* === GLOBAL RESET & BASE === */
+* { 
+  box-sizing: border-box; 
+  margin: 0; 
+  padding: 0; 
+  cursor: crosshair; /* Precision technical feel */
+}
+
+:root {
+  /* SOLARIS CORE PALETTE (VOID OBSIDIAN BASE) */
+  --solaris-void: #0D0C0D;      /* Deep obsidian, light-absorbing */
+  --solaris-gold: #F7F1E8;      /* Bone-white gold, stark and premium */
+  --solaris-accent: #C5A572;    /* Burnished gold for secondary telemetry */
+  --solaris-glass: rgba(13, 12, 13, 0.7);
+  --solaris-glow: rgba(197, 165, 114, 0.2);
+  --solaris-gold-low: rgba(247, 241, 232, 0.08);
+
+  --bg-main: var(--solaris-void);
+  --bg-panel: #141414;          /* Slightly lighter for depth */
+  --bg-surface: #1A1A1A;
+  --border: rgba(247, 241, 232, 0.15);
+  --border-dim: rgba(247, 241, 232, 0.05);
+  --text-main: var(--solaris-gold);
+  --text-dim: #888888;
+  --text-faint: #555555;
+  --grid: rgba(247, 241, 232, 0.02);
+  
+  --cyan: #A8DADC;              /* Pale frozen telemetry */
+  --cyan-dim: rgba(168, 218, 220, 0.1);
+  --orange: var(--solaris-accent);
+  --orange-dim: rgba(197, 165, 114, 0.1);
+  --accent-gold: var(--solaris-accent);
+  --accent-gold-bright: var(--solaris-gold);
+  
+  --thinking: var(--solaris-gold);
+  --thought-bg: rgba(247, 241, 232, 0.03);
+  
+  --user: var(--solaris-gold);
+  --assistant: var(--solaris-accent);
+  --system: var(--text-dim);
+  
+  --radius-sm: 1px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  
+  --shadow-tactile: 0 4px 24px rgba(0,0,0,0.8);
+  --shadow-keycap: 0 0 0 1px rgba(247, 241, 232, 0.1), 0 4px 12px rgba(0,0,0,0.5);
+
+  --success: #8ECAE6;
+  --warning: #FFB703;
+  --error: #E63946;
+
+  /* --- Mapped Tokens --- */
+  --bg-deep: var(--bg-main);
+  --text-primary: var(--text-main);
+  --text-secondary: var(--text-dim);
+  --text-muted: var(--text-dim);
+  --border-gold: var(--border);
+
+  /* --- Fonts --- */
+  --font-display: 'Orbitron', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* --- Layout --- */
+  --sidebar-w: 240px;
+  --diag-w: 360px;
+}
+
+/* SOLARIS LIGHT OVERRIDES (Optional, kept for compatibility if needed) */
+.light-mode {
+  --solaris-void: #F7F1E8;      /* Inverted base */
+  --solaris-gold: #0D0C0D;      /* Inverted gold (now deep charcoal) */
+  --solaris-accent: #8B6E3C;    /* Darker gold for contrast */
+  --solaris-glass: rgba(247, 241, 232, 0.7);
+  --solaris-glow: rgba(139, 110, 60, 0.2);
+  --solaris-gold-low: rgba(13, 12, 13, 0.08);
+
+  --bg-main: #F7F1E8;
+  --bg-panel: #EAE4DB;
+  --bg-surface: #F0EAE0;
+  --border: rgba(13, 12, 13, 0.1);
+  --border-dim: rgba(13, 12, 13, 0.05);
+  --text-main: #0D0C0D;
+  --text-dim: #333333;          /* Darker for better baseline readability */
+  --text-faint: #666666;        /* For placeholders and subtle metadata */
+  --grid: rgba(13, 12, 13, 0.05);
+
+  --cyan: #007780;              /* Darker cyan */
+  --cyan-dim: rgba(0, 119, 128, 0.1);
+  --orange: #8B6E3C;            /* Darker gold/orange */
+  --orange-dim: rgba(139, 110, 60, 0.1);
+  --accent-gold: #8B6E3C;
+  --accent-gold-bright: #0D0C0D;
+
+  --thinking: #444444;
+  --thought-bg: rgba(0, 0, 0, 0.03);
+
+  --user: #1A1A1A;
+  --assistant: #2D5A27;         /* Dark forest green for contrast */
+  --system: #444444;            /* Synced with text-dim */
+
+  --shadow-tactile: 0 4px 24px rgba(0, 0, 0, 0.1);
+  --shadow-keycap: 0 0 0 1px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  /* --- Mapped Tokens --- */
+  --bg-deep: var(--bg-main);
+  --text-primary: var(--text-main);
+  --text-secondary: var(--text-dim);
+  --text-muted: var(--text-dim);
+  --text-muted-faint: var(--text-faint);
+}
+
+/* Specific Light Mode Readability Overrides */
+.light-mode .decal-label {
+  color: var(--text-main) !important;
+  opacity: 0.6;
+}
+
+.light-mode .msg-time {
+  color: var(--text-dim);
+  opacity: 0.8;
+}
+
+.light-mode .sticker-label {
+  color: var(--solaris-gold) !important; /* Charcoal dark in light mode */
+}
+
+.dimmed-telemetry {
+  opacity: 0.85;
+  transition: opacity 0.2s;
+}
+
+.dark-mode .dimmed-telemetry {
+  opacity: 0.85;
+}
+
+.dark-mode {
+  /* Already default in Solaris, keeping block for structure */
+  --text-primary: var(--text-main);
+  --text-secondary: var(--text-dim);
+  --text-muted: var(--text-dim);
+  --bg-deep: var(--bg-main);
+}
+
+/* === SOLARIS UTILITIES === */
+.glass-panel {
+  background: var(--solaris-glass);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-tactile);
+}
+
+.solaris-glyph {
+  fill: none;
+  stroke: var(--solaris-gold);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.solaris-glyph:hover {
+  stroke: var(--solaris-accent);
+  filter: drop-shadow(0 0 5px var(--solaris-glow));
+}
+
+@keyframes solaris-draw {
+  from { stroke-dashoffset: 1000; }
+  to { stroke-dashoffset: 0; }
+}
+
+body {
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible {
+  outline: 3px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+.app-error-boundary {
+  display: grid;
+  place-content: center;
+  gap: 1rem;
+  min-height: 100vh;
+  padding: 2rem;
+  text-align: center;
+}
+
+.module-loading {
+  display: grid;
+  place-content: center;
+  min-height: 8rem;
+  padding: 1rem;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* === PREMIUM SOLARIS BUTTON === */
+.commit-glow-btn {
+  background: var(--solaris-void);
+  color: var(--solaris-gold) !important;
+  border: 1px solid var(--border);
+  padding: 10px 24px;
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.commit-glow-btn::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(247, 241, 232, 0.05),
+    transparent
+  );
+  transition: 0.5s;
+}
+
+.commit-glow-btn:hover {
+  border-color: var(--solaris-accent);
+  color: var(--solaris-accent) !important;
+  box-shadow: 0 0 20px rgba(197, 165, 114, 0.1);
+}
+
+.commit-glow-btn:hover::before {
+  left: 100%;
+}
+
+/* HARDWARE TEXTURE */
+body::after {
+  content: "";
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  opacity: 0.03;
+  z-index: 9999;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3F%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}

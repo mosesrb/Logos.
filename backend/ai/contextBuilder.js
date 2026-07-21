@@ -31,6 +31,7 @@ export async function buildCognitiveContext(persona, userMessage, options = {}) 
 
   const {
     textMemory = [],
+    externalContext = [],
     imageMemory = [],
     relationship = { familiarity: 0.5, trust: 0.5 },
     recentMessages = [],
@@ -67,6 +68,9 @@ export async function buildCognitiveContext(persona, userMessage, options = {}) 
   // 5. Format Memory
   // Combine text and image memory into a structured block
   const memoryParts = [];
+  if (externalContext.length > 0) {
+    memoryParts.push("### EXTERNAL CONTEXT (Web/RAG/System):\n" + externalContext.join('\n\n'));
+  }
   if (textMemory.length > 0) {
     memoryParts.push("### CHRONOS RECALL (Conversations):\n" + textMemory.join('\n'));
   }

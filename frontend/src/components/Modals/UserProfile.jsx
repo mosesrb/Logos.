@@ -1,4 +1,6 @@
 import React from 'react';
+import FocusTrap from 'focus-trap-react';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 const UserProfile = ({
   showUserProfile,
@@ -8,6 +10,7 @@ const UserProfile = ({
   API,
   addLog
 }) => {
+  useEscapeKey(showUserProfile, () => setShowUserProfile(false));
   if (!showUserProfile) return null;
 
   const handleSaveUserProfile = async () => {
@@ -27,11 +30,12 @@ const UserProfile = ({
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content glass-panel" style={{ maxWidth: '500px' }}>
+    <FocusTrap focusTrapOptions={{ initialFocus: false, escapeDeactivates: false, clickOutsideDeactivates: false, fallbackFocus: '.modal-content' }}>
+      <div className="modal-overlay">
+      <div className="modal-content glass-panel" role="dialog" aria-modal="true" aria-label="User cognitive profile" style={{ maxWidth: '500px' }}>
         <div className="modal-header">
           <h2>👤 Your Cognitive Profile</h2>
-          <button className="close-btn" onClick={() => setShowUserProfile(false)}>×</button>
+          <button type="button" aria-label="Close" className="close-btn" onClick={() => setShowUserProfile(false)}>×</button>
         </div>
         <div className="forge-form">
           <div className="form-group">
@@ -114,6 +118,7 @@ const UserProfile = ({
         </div>
       </div>
     </div>
+    </FocusTrap>
   );
 };
 

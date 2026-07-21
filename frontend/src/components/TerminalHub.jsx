@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import SolarisIcon from './SolarisIcon';
 
 const TerminalHub = ({ isVisible, toggleVisibility, diagnosticsWidth = 300, isIntegrated = false }) => {
     const [logs, setLogs] = useState([
@@ -119,12 +120,12 @@ const TerminalHub = ({ isVisible, toggleVisibility, diagnosticsWidth = 300, isIn
     // Integrated mode: standard block, no fixed positioning (Phase 25 Restoration)
     if (isIntegrated) {
         return (
-            <div className="terminal-hub-integrated" style={{
+            <div className="terminal-hub-integrated glass-panel" style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: '500px', // Fixed height when inside sidebar
-                backgroundColor: 'rgba(0,0,0,0.2)',
-                borderBottom: '1px solid var(--border)',
+                height: '500px',
+                backgroundColor: 'var(--solaris-void)',
+                borderBottom: '1px solid var(--solaris-gold-low)',
                 overflow: 'hidden'
             }}>
                 {/* Header (Simplified) */}
@@ -132,9 +133,10 @@ const TerminalHub = ({ isVisible, toggleVisibility, diagnosticsWidth = 300, isIn
                     padding: '8px 12px',
                     fontSize: '9px',
                     fontWeight: '900',
-                    borderBottom: '1px solid var(--border)',
-                    color: 'var(--text-main)',
-                    opacity: 0.6
+                    borderBottom: '1px solid var(--solaris-gold-low)',
+                    color: 'var(--solaris-gold)',
+                    opacity: 0.6,
+                    fontFamily: 'Orbitron, sans-serif'
                 }}>
                     AGENT_LOG_STREAM // LIVE
                 </div>
@@ -142,23 +144,45 @@ const TerminalHub = ({ isVisible, toggleVisibility, diagnosticsWidth = 300, isIn
                 {/* Log View */}
                 <div className="terminal-body" style={{ flex: 1, padding: '10px', overflowY: 'auto', fontSize: '10px' }}>
                     {logs.map(log => (
-                        <div key={log.id} className="terminal-log-item" style={{ marginBottom: '6px' }}>
-                            <span style={{ color: 'var(--text-dim)', marginRight: '6px' }}>{log.time}</span>
-                            {/* Priority Categories */}
-                            {(log.type === 'agent-status' || log.type === 'model') && <span style={{ color: 'var(--cyan)' }}>⚡ {log.text}</span>}
-                            {log.type === 'agent-tool-start' && <span style={{ color: 'var(--orange)' }}>🛠️ {log.tool}</span>}
-                            {(log.type === 'agent-error' || log.type === 'err') && <span style={{ color: 'var(--red)' }}>[ERR] {log.text}</span>}
-                            {(log.type === 'system' || log.type === 'sys') && <span style={{ color: 'var(--cyan)', opacity: 0.8 }}>{log.text}</span>}
-                            {log.type === 'thought' && (
-                                <span style={{ color: 'var(--cyan)', fontStyle: 'italic', opacity: 0.8, borderLeft: '1px solid rgba(0, 255, 255, 0.2)', paddingLeft: '8px' }}>[THOUGHT_STREAM] {log.text}</span>
-                            )}
-                            {log.type === 'model-chunk' && (
-                                <span style={{ color: 'var(--cyan)', opacity: 1.0, fontWeight: '500' }}>▶ MODEL_STREAM // Processing: {log.tokenCount || 0} characters...</span>
-                            )}
-                            {/* Fallback for other log types */}
-                            {!['agent-status', 'model', 'agent-tool-start', 'agent-error', 'err', 'system', 'sys', 'thought', 'model-chunk'].includes(log.type) && 
-                                <span style={{ color: 'var(--text-main)', opacity: 0.7 }}>[{log.type?.toUpperCase()}] {log.text}</span>
-                            }
+                        <div key={log.id} className="terminal-log-item" style={{ marginBottom: '8px', fontFamily: 'JetBrains Mono, monospace' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <span style={{ color: 'var(--solaris-gold)', opacity: 0.4, fontSize: '9px' }}>{log.time}</span>
+                                <div style={{ flex: 1 }}>
+                                    {(log.type === 'agent-status' || log.type === 'model') && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--solaris-gold)' }}>
+                                            <SolarisIcon icon="neural" size={10} />
+                                            <span>{log.text}</span>
+                                        </div>
+                                    )}
+                                    {log.type === 'agent-tool-start' && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--solaris-gold)' }}>
+                                            <SolarisIcon icon="tool" size={10} />
+                                            <span style={{ fontWeight: 'bold' }}>{log.tool}</span>
+                                        </div>
+                                    )}
+                                    {(log.type === 'agent-error' || log.type === 'err') && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#ff4444' }}>
+                                            <SolarisIcon icon="alert" size={10} />
+                                            <span>[ERR] {log.text}</span>
+                                        </div>
+                                    )}
+                                    {(log.type === 'system' || log.type === 'sys') && <span style={{ color: 'var(--solaris-gold)', opacity: 0.8 }}>{log.text}</span>}
+                                    {log.type === 'thought' && (
+                                        <div style={{ color: 'var(--solaris-gold)', fontStyle: 'italic', opacity: 0.6, borderLeft: '1px solid var(--solaris-gold-low)', paddingLeft: '8px' }}>
+                                            [THOUGHT] {log.text}
+                                        </div>
+                                    )}
+                                    {log.type === 'model-chunk' && (
+                                        <div style={{ color: 'var(--solaris-gold)', opacity: 0.9, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <SolarisIcon icon="play" size={8} />
+                                            <span>Processing: {log.tokenCount || 0} chars...</span>
+                                        </div>
+                                    )}
+                                    {!['agent-status', 'model', 'agent-tool-start', 'agent-error', 'err', 'system', 'sys', 'thought', 'model-chunk'].includes(log.type) && 
+                                        <span style={{ color: 'var(--solaris-gold)', opacity: 0.7 }}>[{log.type?.toUpperCase()}] {log.text}</span>
+                                    }
+                                </div>
+                            </div>
                         </div>
                     ))}
                     <div ref={bottomRef} />
@@ -172,7 +196,7 @@ const TerminalHub = ({ isVisible, toggleVisibility, diagnosticsWidth = 300, isIn
     const defaultBottom = 20;
 
     return (
-        <div className={`terminal-hub-floating ${isMinimized ? 'minimized' : ''} ${isDragging ? 'dragging' : ''}`} style={{
+        <div className={`terminal-hub-floating glass-panel ${isMinimized ? 'minimized' : ''} ${isDragging ? 'dragging' : ''}`} style={{
             position: 'fixed',
             bottom: isDragging || pos.y !== 0 ? 'auto' : `${defaultBottom}px`,
             right: isDragging || pos.x !== 0 ? 'auto' : `${defaultRight}px`,
@@ -180,24 +204,21 @@ const TerminalHub = ({ isVisible, toggleVisibility, diagnosticsWidth = 300, isIn
             top: isDragging || pos.y !== 0 ? `${pos.y}px` : 'auto',
             width: isMinimized ? '200px' : '450px',
             height: isMinimized ? '40px' : '350px',
-            backgroundColor: 'var(--bg-deep)',
-            border: `1px solid ${isDragging ? 'var(--cyan)' : 'var(--border)'}`,
-            borderRadius: '4px',
-            boxShadow: isDragging ? '0 20px 60px rgba(0,0,0,0.9), 0 0 20px var(--cyan)' : '0 10px 40px rgba(0,0,0,0.8), 0 0 10px var(--border)',
             zIndex: 2000,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            backdropFilter: 'blur(10px)',
             transition: isDragging ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            opacity: isDragging ? 0.8 : 0.95
+            opacity: isDragging ? 0.8 : 1.0,
+            border: isDragging ? '1px solid var(--solaris-gold)' : undefined,
+            boxShadow: isDragging ? '0 0 20px var(--solaris-gold-low)' : undefined
         }}>
             {/* Header */}
             <div className="terminal-header" 
                 onMouseDown={onMouseDown}
                 style={{
-                    background: isDragging ? 'var(--cyan)' : 'var(--border)',
-                    color: 'var(--bg-deep)',
+                    background: isDragging ? 'var(--solaris-gold)' : 'var(--solaris-gold-low)',
+                    color: isDragging ? 'var(--solaris-void)' : 'var(--solaris-gold)',
                     padding: '6px 12px',
                     fontSize: '10px',
                     fontWeight: '900',
@@ -205,75 +226,97 @@ const TerminalHub = ({ isVisible, toggleVisibility, diagnosticsWidth = 300, isIn
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     letterSpacing: '1px',
-                    cursor: isDragging ? 'grabbing' : 'grab'
+                    cursor: isDragging ? 'grabbing' : 'grab',
+                    borderBottom: '1px solid var(--solaris-gold-low)'
                 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'none' }}>
-                    <span className="pulsing-dot" style={{ width: '6px', height: '6px', backgroundColor: '#f55', borderRadius: '50%' }}></span>
-                    <span>AGENT_LOG_STREAM // {isMinimized ? 'MIN' : 'LIVE'}</span>
+                    <div className="pulsing-dot" style={{ width: '6px', height: '6px', backgroundColor: 'var(--solaris-gold)', borderRadius: '50%', boxShadow: '0 0 5px var(--solaris-gold)' }}></div>
+                    <span style={{ fontFamily: 'Orbitron, sans-serif' }}>AGENT_LOG_STREAM // {isMinimized ? 'MIN' : 'LIVE'}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <button 
                         onClick={(e) => { e.stopPropagation(); setIsMinimized(!isMinimized); }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '10px', color: 'var(--bg-deep)' }}
-                    >{isMinimized ? '□' : '—'}</button>
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'inherit' }}
+                    >
+                        <SolarisIcon icon={isMinimized ? "maximize" : "minimize"} size={12} />
+                    </button>
                     <button 
                         onClick={(e) => { e.stopPropagation(); toggleVisibility(); }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: 'var(--bg-deep)' }}
-                    >✕</button>
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'inherit' }}
+                    >
+                        <SolarisIcon icon="close" size={12} />
+                    </button>
                 </div>
             </div>
 
             {/* Log View Container */}
             {!isMinimized && (
-                <div className="terminal-body" style={{ flex: 1, padding: '10px', overflowY: 'auto' }}>
+                <div className="terminal-body" style={{ flex: 1, padding: '10px', overflowY: 'auto', background: 'var(--solaris-void)' }}>
                     {logs.map(log => (
-                        <div key={log.id} className="terminal-log-item" style={{ marginBottom: '8px' }}>
-                            <span className="log-ts" style={{ color: 'var(--text-dim)', fontSize: '9px', marginRight: '8px' }}>{log.time}</span>
-                            
-                            {log.type === 'agent-status' && (
-                                <span style={{ color: 'var(--cyan)' }}>⚡ {log.text}</span>
-                            )}
+                        <div key={log.id} className="terminal-log-item" style={{ marginBottom: '10px', fontFamily: 'JetBrains Mono, monospace' }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                <span className="log-ts" style={{ color: 'var(--solaris-gold)', opacity: 0.4, fontSize: '9px', paddingTop: '2px' }}>{log.time}</span>
+                                
+                                <div style={{ flex: 1 }}>
+                                    {log.type === 'agent-status' && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--solaris-gold)' }}>
+                                            <SolarisIcon icon="neural" size={10} />
+                                            <span style={{ fontSize: '10px', fontWeight: '600' }}>{log.text}</span>
+                                        </div>
+                                    )}
 
-                            {log.type === 'agent-tool-start' && (
-                                <div style={{ borderLeft: '2px solid var(--orange)', paddingLeft: '8px' }}>
-                                    <span style={{ color: 'var(--orange)', fontWeight: 'bold' }}>RUNNING_TOOL: {log.tool}</span>
-                                    <div style={{ color: 'var(--text-main)', opacity: 0.7, fontSize: '10px' }}>{log.text}</div>
+                                    {log.type === 'agent-tool-start' && (
+                                        <div style={{ borderLeft: '2px solid var(--solaris-gold)', paddingLeft: '8px', marginBottom: '4px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--solaris-gold)' }}>
+                                                <SolarisIcon icon="tool" size={10} />
+                                                <span style={{ fontSize: '10px', fontWeight: 'bold' }}>RUNNING_TOOL: {log.tool}</span>
+                                            </div>
+                                            <div style={{ color: 'var(--solaris-gold)', opacity: 0.6, fontSize: '10px', marginTop: '2px' }}>{log.text}</div>
+                                        </div>
+                                    )}
+
+                                    {log.type === 'agent-tool-result' && (
+                                        <div style={{ 
+                                            color: 'var(--solaris-gold)', 
+                                            padding: '6px 10px', 
+                                            whiteSpace: 'pre-wrap', 
+                                            wordBreak: 'break-word', 
+                                            borderLeft: '2px solid var(--solaris-gold-low)', 
+                                            margin: '4px 0 4px 12px',
+                                            backgroundColor: 'var(--solaris-gold-low)',
+                                            fontSize: '10px',
+                                            borderRadius: '2px'
+                                        }}>
+                                            {log.text}
+                                        </div>
+                                    )}
+
+                                    {log.type === 'agent-error' && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ff4444' }}>
+                                            <SolarisIcon icon="alert" size={10} />
+                                            <span style={{ fontSize: '10px', fontWeight: 'bold' }}>[SYSTEM_ERR] {log.text}</span>
+                                        </div>
+                                    )}
+
+                                    {log.type === 'system' && (
+                                        <span style={{ color: 'var(--solaris-gold)', opacity: 0.8, fontSize: '10px' }}>{log.text}</span>
+                                    )}
+                                    
+                                    {log.type === 'thought' && (
+                                        <div style={{ display: 'flex', gap: '8px', borderLeft: '1px solid var(--solaris-gold-low)', paddingLeft: '8px' }}>
+                                            <span style={{ color: 'var(--solaris-gold)', fontStyle: 'italic', opacity: 0.5, fontSize: '9px' }}>
+                                                [THOUGHT_STREAM] {log.text}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {log.type === 'model-chunk' && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--solaris-gold)', opacity: 0.9 }}>
+                                             <SolarisIcon icon="play" size={8} />
+                                             <span style={{ fontSize: '10px' }}>MODEL_STREAM // Processing: {log.tokenCount || 0} characters...</span>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-
-                            {log.type === 'agent-tool-result' && (
-                                <div style={{ 
-                                    color: 'var(--text-main)', 
-                                    padding: '4px 8px', 
-                                    whiteSpace: 'pre-wrap', 
-                                    wordBreak: 'break-word', 
-                                    borderLeft: '2px solid var(--purple)', 
-                                    margin: '4px 0 4px 12px',
-                                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                                    fontSize: '10px'
-                                }}>
-                                    {log.text}
-                                </div>
-                            )}
-
-                            {log.type === 'agent-error' && (
-                                <span style={{ color: 'var(--red)', fontWeight: 'bold' }}>[ERR] {log.text}</span>
-                            )}
-
-                            {log.type === 'system' && (
-                                <span style={{ color: 'var(--cyan)', opacity: 0.8 }}>{log.text}</span>
-                            )}
-                            
-                            {log.type === 'thought' && (
-                                <span style={{ color: 'var(--cyan)', fontStyle: 'italic', opacity: 0.8, fontSize: '9px', display: 'block', borderLeft: '1px solid rgba(0, 255, 255, 0.3)', paddingLeft: '8px' }}>
-                                    [THOUGHT_STREAM] {log.text}
-                                </span>
-                            )}
-                            {log.type === 'model-chunk' && (
-                                <span style={{ color: 'var(--cyan)', fontSize: '10px', display: 'block', paddingLeft: '8px', borderLeft: '1px solid var(--cyan)' }}>
-                                     ▶ MODEL_STREAM // Processing: {log.tokenCount || 0} characters...
-                                </span>
-                            )}
+                            </div>
                         </div>
                     ))}
                     <div ref={bottomRef} />

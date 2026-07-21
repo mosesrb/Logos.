@@ -68,7 +68,8 @@ Inspired by advanced reasoning agents, LÓGOS includes a forced **Planning Phase
 ## ✨ Key Features
 
 - **Multi-Modal Streaming**: True real-time interaction for both text and generated assets.
-- **Sovereign Persona Management**: Design and refine AI agents that evolve based on your interaction history.
+- **Sovereign Persona Forge**: Design and refine AI agents that evolve based on your interaction history. Seeded personas come fully configured with core expertise, quirks, and personality styles right out of the box.
+- **Robust Model Orchestration**: Dynamic resolution of available Ollama models with environment-based fallback safety (`UTILITY_MODEL`), preventing crashes when switching hardware.
 - **Zero Telemetry**: No tracking, no data leakage, no "calling home."
 
 ## 🛡️ Privacy First

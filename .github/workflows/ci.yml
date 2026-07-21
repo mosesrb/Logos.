@@ -1,0 +1,76 @@
+name: LÓGOS AI CI Pipeline
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  backend-tests:
+    name: Backend CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        cache-dependency-path: './backend/package-lock.json'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run lint
+      run: npm run lint --if-present
+      
+    - name: Run unit tests
+      run: npm test
+
+  frontend-tests:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        cache-dependency-path: './frontend/package-lock.json'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run lint
+      run: npm run lint --if-present
+      
+    - name: Run unit tests (Vitest)
+      run: npm run test:ui -- --run
+      
+    - name: Install Playwright Browsers
+      run: npx playwright install --with-deps chromium
+      
+    - name: Run Playwright E2E and A11y tests
+      run: npx playwright test
+
+  docker-smoke-test:
+    name: Docker Build Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build Backend Image
+      run: docker build -t logos-backend ./backend
+      
+    - name: Build Frontend Image
+      run: docker build -t logos-frontend ./frontend

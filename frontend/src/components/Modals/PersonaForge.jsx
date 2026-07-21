@@ -1,4 +1,6 @@
-import React, { useEffect } from 'react';
+import React from 'react';
+import FocusTrap from 'focus-trap-react';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 const PersonaForge = ({
   showPersonaForge,
@@ -22,18 +24,20 @@ const PersonaForge = ({
   sessionId,
   addLog
 }) => {
+  useEscapeKey(showPersonaForge, () => { setShowPersonaForge(false); setForgeTab('settings'); });
   if (!showPersonaForge) return null;
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content forge-modal manager-overhaul">
+    <FocusTrap focusTrapOptions={{ initialFocus: false, escapeDeactivates: false, clickOutsideDeactivates: false, fallbackFocus: '.modal-content' }}>
+      <div className="modal-overlay">
+      <div className="modal-content forge-modal manager-overhaul" role="dialog" aria-modal="true" aria-label="Persona manager">
         <div className="hardware-header">
           <span>PERSONA_MANAGER_v3</span>
           <span className="hardware-id">UNIT: BRAIN-GEN-04</span>
         </div>
         <div className="decal-label" style={{ position: 'absolute', top: 50, right: 20 }}>[PROPERTY_OF_MAINFRAME_CORP]</div>
 
-        <button className="close-btn" onClick={() => { setShowPersonaForge(false); setForgeTab('settings'); }}>×</button>
+        <button type="button" aria-label="Close" className="close-btn" onClick={() => { setShowPersonaForge(false); setForgeTab('settings'); }}>×</button>
 
         <div className="forge-container">
           {/* --- SIDEBAR LIST --- */}
@@ -332,6 +336,7 @@ const PersonaForge = ({
         </div>
       </div>
     </div>
+    </FocusTrap>
   );
 };
 

@@ -115,7 +115,7 @@ export function initializePersonaMemory(personaId) {
   console.log(`🧠 PERSONA_MEMORY: Initialized structure for persona "${personaId}"`);
 }
 
-function loadPersonaMetadata(personaId) {
+export function loadPersonaMetadata(personaId) {
   const metaPath = path.join(getPersonaMemoryDir(personaId), "metadata.json");
   if (!fs.existsSync(metaPath)) return [];
   try { return JSON.parse(fs.readFileSync(metaPath, "utf8")); } catch(e) { return []; }
@@ -135,10 +135,10 @@ function savePersonaEmbeddings(personaId, entries) {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "embeddings.json"), JSON.stringify(entries, null, 2), "utf8");
 }
-function loadGlobalImageIndex() {
+export function loadGlobalImageIndex() {
   try { return JSON.parse(fs.readFileSync(GLOBAL_IMAGE_INDEX_PATH, "utf8")); } catch(e) { return []; }
 }
-function saveGlobalImageIndex(entries) {
+export function saveGlobalImageIndex(entries) {
   fs.writeFileSync(GLOBAL_IMAGE_INDEX_PATH, JSON.stringify(entries, null, 2), "utf8");
 }
 function computeFileHash(filePath) {

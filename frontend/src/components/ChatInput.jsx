@@ -57,9 +57,11 @@ const ChatInput = ({
             <div key={idx} className="vision-item">
               <img src={img} alt="preview" />
               <button 
+                type="button"
                 className="vision-item-remove" 
                 onClick={() => handleRemoveVision(idx)}
                 title="Remove image"
+                aria-label={`Remove attached image ${idx + 1}`}
               >
                 ✕
               </button>
@@ -70,18 +72,22 @@ const ChatInput = ({
 
       <div className="chat-input-toolbar" style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-panel)', borderBottom: '1px solid var(--border)' }}>
         <button 
+          type="button"
           className={`vocal-btn-alt ${isListening ? "active" : ""}`} 
           onClick={startListening} 
           title="Toggle Voice Mode"
+          aria-label={isListening ? "Stop voice input" : "Start voice input"}
           style={{ width: '40px', height: '40px', background: 'none', border: 'none' }}
         >
           {isListening ? "🛑" : "🎙️"}
         </button>
         
         <button 
+          type="button"
           className="upload-trigger"
           onClick={() => fileInputRef.current?.click()}
           title="Attach Image (JPG/PNG)"
+          aria-label="Attach image"
           style={{ width: '40px', height: '40px', fontSize: '1.2rem' }}
         >
           📎
@@ -99,6 +105,7 @@ const ChatInput = ({
       <div className="chat-input h-glow">
         <textarea
           className={`chat-input-textarea ${isDragging ? 'drag-active' : ''}`}
+          aria-label="Message"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={isStreaming ? "Waiting for response..." : "Type your message... (Shift+Enter for newline)"}
@@ -117,17 +124,21 @@ const ChatInput = ({
         />
         {isStreaming ? (
           <button 
+            type="button"
             onClick={handleStopGeneration} 
             className="stop-btn" 
-            style={{ background: 'var(--red)', color: '#fff', border: '1px solid #f00' }}
+            style={{ background: 'var(--error)', color: 'var(--solaris-gold)', border: '1px solid var(--error)' }}
             title="Force stop generation"
+            aria-label="Stop generation"
           >
             STOP
           </button>
         ) : (
           <button 
+            type="button"
             onClick={() => sendMessage()} 
             disabled={isStreaming || (!input.trim() && visionBuffer.length === 0)}
+            aria-label="Send message"
           >
             Send
           </button>

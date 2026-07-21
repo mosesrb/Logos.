@@ -61,7 +61,7 @@ const NeuralMap = ({
         <div className="legend-item"><div className="legend-dot" style={{ backgroundColor: 'hsl(30, 80%, 45%)' }} /> POSITIVE</div>
         <div className="legend-item"><div className="legend-dot" style={{ backgroundColor: 'hsl(180, 70%, 40%)' }} /> NEUTRAL</div>
         <div className="legend-item"><div className="legend-dot" style={{ backgroundColor: 'hsl(195, 80%, 35%)' }} /> NEGATIVE</div>
-        <div className="legend-item"><div className="legend-dot" style={{ backgroundColor: 'var(--text-dim)', border: '1px dashed #fff' }} /> PINNED</div>
+        <div className="legend-item"><div className="legend-dot" style={{ backgroundColor: 'var(--text-dim)', border: '1px dashed var(--solaris-gold)' }} /> PINNED</div>
       </div>
       <svg
         viewBox="0 0 500 500"

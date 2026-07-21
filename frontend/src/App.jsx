@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { apiFetch } from "./services/apiClient";
 import "./index.css";
 
 // Modular Components
@@ -41,7 +42,7 @@ export default function App() {
   const [input, setInput] = useState("");
   const [models, setModels] = useState([]);
   const [selectedPersonaIds, setSelectedPersonaIds] = useState([]);
-  const [selectedModelSingle, setSelectedModelSingle] = useState("gemma4:e4b");
+  const [selectedModelSingle, setSelectedModelSingle] = useState(undefined);
   const [interactionMode, setInteractionMode] = useState("Normal");
   const [isAgentTerminalActive, setAgentTerminalActive] = useState(false);
   const [activeView, setActiveView] = useState('chat'); // 'chat' | 'agent-desk'
@@ -174,8 +175,7 @@ export default function App() {
   // System HUD polling
   useEffect(() => {
     const poll = setInterval(() => {
-      fetch(`${API}/system/stats`)
-        .then(r => r.json())
+      apiFetch(`/system/stats`)
         .then(setSysStats)
         .catch(() => { });
     }, 3000);
@@ -207,8 +207,7 @@ export default function App() {
   // Fetch all initial data
   useEffect(() => {
     // Models
-    fetch(`${API}/models`)
-      .then(r => r.json())
+    apiFetch(`/models`)
       .then(list => {
         setModels(list);
         if (list.length > 0) {
@@ -217,13 +216,12 @@ export default function App() {
         }
       })
       .catch(() => {
-        setModels(["gemma4:e4b", "llama3.1:8b", "qwen2.5-coder:7b", "gemma2:2b"]);
+        setModels(["llama3.1:8b", "qwen2.5-coder:7b", "gemma2:2b"]);
         addLog("⚠️ SYSTEM_ADVISORY: Using model fail-safes.", "sys");
       });
 
     // Sessions
-    fetch(`${API}/sessions`)
-      .then(r => r.json())
+    apiFetch(`/sessions`)
       .then(data => {
         setSessions(data);
         if (data.length > 0 && !currentSession) {
@@ -234,16 +232,16 @@ export default function App() {
       .catch(e => console.error("Sessions fetch failed", e));
 
     // Personas
-    fetch(`${API}/persona`).then(r => r.json()).then(setPersonas).catch(e => console.error("Personas fetch failed", e));
+    apiFetch(`/persona`).then(setPersonas).catch(e => console.error("Personas fetch failed", e));
 
     // Scenarios
-    fetch(`${API}/scenarios`).then(r => r.json()).then(setScenarios).catch(e => console.error("Scenarios fetch failed", e));
+    apiFetch(`/scenarios`).then(setScenarios).catch(e => console.error("Scenarios fetch failed", e));
 
     // User Persona (Mirror)
-    fetch(`${API}/user/persona`).then(r => r.json()).then(setUserPersona).catch(e => console.error("User persona fetch failed", e));
+    apiFetch(`/user/persona`).then(setUserPersona).catch(e => console.error("User persona fetch failed", e));
 
     // Synapse Presets
-    fetch(`${API}/synapse/presets`).then(r => r.json()).then(setSynapsePresets).catch(() => setSynapsePresets([]));
+    apiFetch(`/synapse/presets`).then(setSynapsePresets).catch(() => setSynapsePresets([]));
   }, []);
 
 
@@ -270,8 +268,7 @@ export default function App() {
 
   useEffect(() => {
     if (!currentSession?.id) return;
-    fetch(`${API}/session/${currentSession.id}`)
-      .then((r) => r.json())
+    apiFetch(`/session/${currentSession.id}`)
       .then((s) => {
         setMessages(s.messages || []);
         setWebMode(!!s.webMode);
@@ -279,9 +276,9 @@ export default function App() {
         setInteractionMode(s.parallelMode ? "Parallel" : (s.interactionMode || "Normal"));
         setSelectedPersonaId(s.selectedPersonaId || "");
         setSelectedPersonaIds(s.selectedPersonaIds || []);
-        setSelectedModelSingle(s.model || "gemma4:e4b");
+        setSelectedModelSingle(s.model || undefined);
         setSelectedVoice(s.selectedVoice || "male_us");
-        setJudgePersonaId(s.judgePersonaId || s.model || "gemma4:e4b");
+        setJudgePersonaId(s.judgePersonaId || s.model || undefined);
         fetchFiles(s.id);
         lastLoadedSessionId.current = s.id;
       })
@@ -309,8 +306,7 @@ export default function App() {
       return;
     }
     const fetchMood = () => {
-      fetch(`${API}/session/${currentSession.id}/persona/${selectedPersonaId}/mood`)
-        .then(r => r.json())
+      apiFetch(`/session/${currentSession.id}/persona/${selectedPersonaId}/mood`)
         .then(data => {
           setPersonaMood(data);
           setMoodHistory(prev => {
@@ -331,16 +327,14 @@ export default function App() {
   };
 
   const fetchFiles = (sessionId) => {
-    fetch(`${API}/session/${sessionId}/files`)
-      .then((r) => r.json())
+    apiFetch(`/session/${sessionId}/files`)
       .then(setSessionFiles)
       .catch(console.error);
   };
 
   const fetchSessionLogs = (sessionId) => {
     if (!sessionId) return;
-    fetch(`${API}/session/${sessionId}/logs`)
-      .then(r => r.json())
+    apiFetch(`/session/${sessionId}/logs`)
       .then(setLogs)
       .catch(console.error);
   };
@@ -362,13 +356,13 @@ export default function App() {
     const prompt = `Generate a very short, concise 3-word title for a chat that starts with: "${firstUserMsg.content.substring(0, 100)}". Output ONLY the title, no quotes.`;
 
     try {
-      const res = await fetch(`${API}/chat/action/generate-title`, {
+      const res = await apiFetch(`/chat/action/generate-title`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, model: selectedModelSingle })
+        body: JSON.stringify({ prompt, model: selectedModelSingle }),
+        rawResponse: true
       });
-      if (res.ok) {
-        const data = await res.json();
+      {
+        const data = res;
         if (data.title) renameSession(sessionId, data.title.trim());
       }
     } catch (e) {
@@ -392,19 +386,18 @@ export default function App() {
 
 
   const createSession = async () => {
-    const res = await fetch(`${API}/session`, {
+    const res = await apiFetch(`/session`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ webMode: false, parallelMode: false, selectedPersonaIds: [], ragMode: false }),
+      body: JSON.stringify({ webMode: false, parallelMode: false, selectedPersonaIds: [], ragMode: false })
     });
-    const data = await res.json();
+    const data = res;
     setSessions((s) => [...s, data]);
     setCurrentSession(data);
     setMessages([]);
   };
 
   const deleteSession = async (id) => {
-    await fetch(`${API}/session/${id}`, { method: "DELETE" });
+    await apiFetch(`/session/${id}`, { method: "DELETE" });
     setSessions((s) => s.filter((x) => x.id !== id));
     if (currentSession?.id === id) {
       setCurrentSession(null);
@@ -413,7 +406,7 @@ export default function App() {
   };
 
   const deletePersona = async (id) => {
-    await fetch(`${API}/persona/${id}`, { method: "DELETE" });
+    await apiFetch(`/persona/${id}`, { method: "DELETE" });
     setPersonas((prev) => prev.filter((p) => p.id !== id));
     if (selectedPersonaId === id) setSelectedPersonaId("");
     if (editingPersona?.id === id) setEditingPersona(null);
@@ -422,16 +415,15 @@ export default function App() {
   const handleSavePersona = async () => {
     if (!forgeData.name || !forgeData.system_prompt) return;
     const method = editingPersona ? "PUT" : "POST";
-    const url = editingPersona ? `${API}/persona/${editingPersona.id}` : `${API}/persona`;
+    const url = editingPersona ? `/persona/${editingPersona.id}` : `/persona`;
 
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(forgeData),
+      body: JSON.stringify(forgeData)
     });
 
-    if (res.ok) {
-      const saved = await res.json();
+    {
+      const saved = res;
       setPersonas(prev => editingPersona ? prev.map(p => p.id === saved.id ? saved : p) : [...prev, saved]);
       setForgeSaveStatus("saved");
       setTimeout(() => setForgeSaveStatus("idle"), 3000);
@@ -480,21 +472,20 @@ export default function App() {
 
 
   const deleteScenario = async (id) => {
-    await fetch(`${API}/scenarios/${id}`, { method: "DELETE" });
+    await apiFetch(`/scenarios/${id}`, { method: "DELETE" });
     setScenarios((prev) => prev.filter((s) => s.id !== id));
     if (selectedScenarioId === id) setSelectedScenarioId("");
   };
 
   const handleSaveScenario = async () => {
     if (!forgeScenarioData.name || !forgeScenarioData.description) return;
-    const res = await fetch(`${API}/scenarios`, {
+    const res = await apiFetch(`/scenarios`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...forgeScenarioData, id: editingScenario?.id }),
+      body: JSON.stringify({ ...forgeScenarioData, id: editingScenario?.id })
     });
 
-    if (res.ok) {
-      const saved = await res.json();
+    {
+      const saved = res;
       setScenarios(prev => editingScenario ? prev.map(s => s.id === saved.id ? saved : s) : [...prev, saved]);
       setShowScenarioBuilder(false);
       setEditingScenario(null);
@@ -529,10 +520,9 @@ export default function App() {
 
 
   const renameSession = async (id, title) => {
-    await fetch(`${API}/session/${id}`, {
+    await apiFetch(`/session/${id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title })
     });
     setSessions((s) => s.map((x) => (x.id === id ? { ...x, title } : x)));
     if (currentSession?.id === id) setCurrentSession(prev => ({ ...prev, title }));
@@ -542,30 +532,15 @@ export default function App() {
   const executeTool = async (toolName, args) => {
     addLog(`🛠️ ICARUS: Launching ${toolName}...`, "sys");
     try {
-      const res = await fetch(`${API}/tools/execute`, {
+      const res = await apiFetch(`/tools/execute`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toolName, args }),
+        body: JSON.stringify({ toolName, args })
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        const errMsg = errorData.error || `HTTP_FAIL_${res.status}`;
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: `❌ SYSTEM_FAILURE: ${errMsg}`, model: "LOGOS_CORE", time: new Date().toISOString() },
-        ]);
-        setIsStreaming(false);
-        return;
-      }
-
-      const data = await res.json();
-      if (res.ok) {
+      const data = res;
+      {
         addLog(`✅ TOOL_SUCCESS: ${toolName}`, "sys");
         return data.result;
-      } else {
-        addLog(`❌ TOOL_ERROR: ${data.error}`, "err");
-        return `Error: ${data.error}`;
       }
     } catch (e) {
       addLog(`❌ EXCEPTION: ${e.message}`, "err");
@@ -608,10 +583,9 @@ export default function App() {
       selectedVoice,
       selectedPersonaId
     };
-    fetch(`${API}/session/${currentSession.id}`, {
+    apiFetch(`/session/${currentSession.id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload)
     }).catch(console.error);
   }, [webMode, interactionMode, ragMode, selectedPersonaIds, selectedPersonaId, selectedModelSingle, selectedVoice]);
 
@@ -649,9 +623,8 @@ export default function App() {
           formData.append("audioFloat32", floatBlob, "audio.raw");
 
           addLog("TRANSCRIBING_AUDIO...", "sys");
-          const res = await fetch(`${API}/audio/transcribe`, { method: "POST", body: formData });
-          if (!res.ok) throw new Error("STT Failed on server");
-          const { text } = await res.json();
+          const res = await apiFetch(`/audio/transcribe`, { method: "POST", body: formData });
+          const { text } = res;
 
           if (text.toLowerCase().startsWith("nexus") || text.toLowerCase().startsWith(" nexus")) {
             addLog(`VOICE_COMMAND: ${text}`, "sys");
@@ -687,14 +660,12 @@ export default function App() {
         if (p?.voice) voiceToUse = p.voice;
       }
 
-      const res = await fetch(`${API}/audio/synthesize`, {
+      const res = await apiFetch(`/audio/synthesize`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, voice: voiceToUse })
       });
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
 
-      const { audio: base64Audio } = await res.json();
+      const { audio: base64Audio } = res;
       if (!base64Audio) throw new Error("Received empty audio data from server");
 
       // Convert base64 to Blob (efficiently)
@@ -727,8 +698,8 @@ export default function App() {
   const fetchVectors = async () => {
     if (!currentSession) return;
     try {
-      const res = await fetch(`${API}/session/${currentSession.id}/vectors`);
-      const nodes = await res.json();
+      const res = await apiFetch(`/session/${currentSession.id}/vectors`);
+      const nodes = res;
       setVectorNodes(nodes);
     } catch (e) { console.error(e); }
   };
@@ -765,12 +736,11 @@ export default function App() {
     if (!currentSession) return;
     const text = `${log.time} [${log.type.toUpperCase()}] ${log.message}`;
     try {
-      const res = await fetch(`${API}/session/${currentSession.id}/inject`, {
+      const res = await apiFetch(`/session/${currentSession.id}/inject`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, source: "Log Pin" }),
+        body: JSON.stringify({ text, source: "Log Pin" })
       });
-      if (res.ok) addLog("LOG_PINNED: Injected into Shadow Memory", "sys");
+      addLog("LOG_PINNED: Injected into Shadow Memory", "sys");
     } catch (e) {
       console.error(e);
     }
@@ -786,13 +756,11 @@ export default function App() {
     setUploadStatus("Uploading...");
 
     try {
-      const res = await fetch(`${API}/upload/${currentSession.id}`, { method: "POST", body: formData });
-      if (res.ok) {
+      const res = await apiFetch(`/upload/${currentSession.id}`, { method: "POST", body: formData });
+      {
         setUploadStatus(`Uploaded (${(file.size / 1024).toFixed(1)}KB)`);
         addLog(`FILE_UPLOAD: ${file.name} success`, "sys");
         fetchFiles(currentSession.id);
-      } else {
-        setUploadStatus("Upload failed");
       }
     } catch (err) {
       console.error(err);
@@ -815,8 +783,8 @@ export default function App() {
   const deleteFile = async (diskName) => {
     if (!currentSession) return;
     try {
-      const res = await fetch(`${API}/session/${currentSession.id}/file/${diskName}`, { method: "DELETE" });
-      if (res.ok) {
+      const res = await apiFetch(`/session/${currentSession.id}/file/${diskName}`, { method: "DELETE" });
+      {
         addLog(`FILE_DELETE: ${diskName}`, "sys");
         fetchFiles(currentSession.id);
       }
@@ -999,9 +967,8 @@ export default function App() {
             }
         }, 5000);
 
-        const response = await fetch(`${API}/agent/chat`, {
+        const response = await apiFetch(`/agent/chat`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             signal,
             body: JSON.stringify({ 
                 message: prompt, 
@@ -1010,7 +977,8 @@ export default function App() {
                 systemPrompt: currentPersona?.system_prompt || "You are an autonomous AI engineering agent. Use tools to solve the user request. Keep responses technical and concise.",
                 persona: currentPersona,
                 images: cleanImages
-            })
+            }),
+            rawResponse: true
         });
         setVisionBuffer([]);
         const reader = response.body.getReader();
@@ -1084,101 +1052,92 @@ export default function App() {
 
     const cleanImages = visionBuffer.map(img => img.includes("base64,") ? img.split("base64,")[1] : img);
     try {
-        const res = await fetch(`${API}/chat/${currentSession.id}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal,
-          body: JSON.stringify({
-            prompt,
-            model: selectedModelSingle,
-            webMode,
-            ragMode,
-            images: cleanImages,
-            pinnedMemories,
-            personaId: selectedPersonaId || null,
-            unrestricted: unrestrictedMode,
-          }),
-        });
-        
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({ error: "STREAM_INITIALIZATION_CRASH" }));
-          const errMsg = errorData.error || `OLLAMA_HTTP_${res.status}`;
-          addLog(`❌ STREAM_ERROR: ${errMsg}`, "sys");
-          pushLocalMessage({ role: "assistant", content: `❌ SYSTEM_FAILURE: ${errMsg}`, model: "LOGOS_CORE" });
-          setVisionBuffer([]);
+      const res = await apiFetch(`/chat/${currentSession.id}`, {
+        method: "POST",
+        signal,
+        body: JSON.stringify({
+          prompt,
+          model: selectedModelSingle,
+          webMode,
+          ragMode,
+          images: cleanImages,
+          pinnedMemories,
+          personaId: selectedPersonaId || null,
+          unrestricted: unrestrictedMode,
+        }),
+        rawResponse: true,
+      });
+
+      setVisionBuffer([]);
+      setPinnedMemories([]); // Clear after send
+
+      let buf = "";
+      let thoughtBuf = "";
+      let capturedSources = [];
+      let firstChunk = true;
+      let pendingTrigger = null;
+
+      // Initial status pulse (Thinking heartbeat)
+      const personaName = personas.find(p => p.id === selectedPersonaId)?.name || selectedModelSingle;
+      setStreamingBlocks([{ label: personaName, content: "", thought: "Neural processing...", personaId: selectedPersonaId }]);
+
+      await readEventStream(res, (obj) => {
+        lastDataTime = Date.now(); // Heartbeat
+        if (firstChunk) {
+          setMetrics(prev => ({ ...prev, latency: Date.now() - startTime }));
+          firstChunk = false;
+          setStreamingBlocks([]); // Clear the heartbeat once data arrives
+        }
+        if (obj.type === "status") {
+          setStreamingBlocks([{ label: personaName, content: "", thought: obj.content, personaId: selectedPersonaId }]);
           return;
         }
-
-        setVisionBuffer([]);
-        setPinnedMemories([]); // Clear after send
-        
-        let buf = "";
-        let thoughtBuf = "";
-        let capturedSources = [];
-        let firstChunk = true;
-        let pendingTrigger = null;
-
-        // Initial status pulse (Thinking heartbeat)
-        const personaName = personas.find(p => p.id === selectedPersonaId)?.name || selectedModelSingle;
-        setStreamingBlocks([{ label: personaName, content: "", thought: "Neural processing...", personaId: selectedPersonaId }]);
-
-        await readEventStream(res, (obj) => {
-          lastDataTime = Date.now(); // Heartbeat
-          if (firstChunk) {
-            setMetrics(prev => ({ ...prev, latency: Date.now() - startTime }));
-            firstChunk = false;
-            setStreamingBlocks([]); // Clear the heartbeat once data arrives
-          }
-          if (obj.type === "status") {
-            setStreamingBlocks([{ label: personaName, content: "", thought: obj.content, personaId: selectedPersonaId }]);
-            return;
-          }
-          if (obj.type === "thought") {
-            const content = obj.content ?? "";
-            thoughtBuf += content;
-            addLog(content, "thought");
-            setStreamingBlocks([{ label: personaName, content: buf, thought: "Thinking...", personaId: selectedPersonaId }]);
-            return;
-          }
-          if (obj.type === "sources") {
-            capturedSources = obj.data;
-            return;
-          }
-          if (obj.type === "trigger") {
-            pendingTrigger = obj;
-            return;
-          }
-          if (obj.type === "image") {
-            const imgMark = `\n\n![Generated Image](${obj.content})\n\n`;
-            buf += imgMark;
-            dispatchStreamLog(`[IMAGE_GEN]`, 'model-chunk');
-            setStreamingBlocks([{ label: personaName, content: buf, thought: thoughtBuf, personaId: selectedPersonaId }]);
-            return;
-          }
+        if (obj.type === "thought") {
           const content = obj.content ?? "";
-          buf += content;
-          dispatchStreamLog(content, 'model-chunk');
-          setMetrics(prev => ({ ...prev, tokens: prompt.length + buf.length }));
-          setStreamingBlocks([{
-            label: personaName,
-            content: buf,
-            thought: thoughtBuf,
-            personaId: selectedPersonaId
-          }]);
-        });
-
-        addLog(`END_STREAM: ${selectedModelSingle} (${buf.length} chars)`, "model");
-        const finalContent = buf.trim() || `❌ RETINA_ERROR: Model [${selectedModelSingle}] returned an empty response.`;
-        pushLocalMessage({ role: "assistant", content: finalContent, thought: thoughtBuf.trim(), model: selectedModelSingle, sources: capturedSources, personaId: selectedPersonaId });
-        if (autoRead) speakText(finalContent, selectedPersonaId);
-
-        if (pendingTrigger) {
-          const trigger = pendingTrigger;
-          addLog(`📡 REACTING: ${trigger.action} for ${trigger.personaId}`, "sys");
-          setTimeout(() => {
-            handleNormal(trigger.content); 
-          }, 1500);
+          thoughtBuf += content;
+          addLog(content, "thought");
+          setStreamingBlocks([{ label: personaName, content: buf, thought: "Thinking...", personaId: selectedPersonaId }]);
+          return;
         }
+        if (obj.type === "sources") {
+          capturedSources = obj.data;
+          return;
+        }
+        if (obj.type === "trigger") {
+          pendingTrigger = obj;
+          return;
+        }
+        if (obj.type === "image") {
+          const imgMark = `\n\n![Generated Image](${obj.content})\n\n`;
+          buf += imgMark;
+          dispatchStreamLog(`[IMAGE_GEN]`, 'model-chunk');
+          setStreamingBlocks([{ label: personaName, content: buf, thought: thoughtBuf, personaId: selectedPersonaId }]);
+          return;
+        }
+        const content = obj.content ?? "";
+        buf += content;
+        dispatchStreamLog(content, 'model-chunk');
+        setMetrics(prev => ({ ...prev, tokens: prompt.length + buf.length }));
+        setStreamingBlocks([{
+          label: personaName,
+          content: buf,
+          thought: thoughtBuf,
+          personaId: selectedPersonaId
+        }]);
+      });
+
+      addLog(`END_STREAM: ${selectedModelSingle} (${buf.length} chars)`, "model");
+      const finalContent = buf.trim() || `❌ RETINA_ERROR: Model [${selectedModelSingle}] returned an empty response.`;
+      pushLocalMessage({ role: "assistant", content: finalContent, thought: thoughtBuf.trim(), model: selectedModelSingle, sources: capturedSources, personaId: selectedPersonaId });
+      if (autoRead) speakText(finalContent, selectedPersonaId);
+
+      if (pendingTrigger) {
+        const trigger = pendingTrigger;
+        addLog(`📡 REACTING: ${trigger.action} for ${trigger.personaId}`, "sys");
+        setTimeout(() => {
+          handleNormal(trigger.content); 
+        }, 1500);
+      }
     } catch (e) {
         if (e.name === 'AbortError') {
             console.log("Normal request aborted.");
@@ -1205,21 +1164,12 @@ export default function App() {
     ms.forEach((m) => (buffers[m] = ""));
 
     const cleanImages = visionBuffer.map(img => img.includes("base64,") ? img.split("base64,")[1] : img);
-    const res = await fetch(`${API}/chat/parallel/${currentSession.id}`, {
+    const res = await apiFetch(`/chat/parallel/${currentSession.id}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt, personaIds: selectedPersonaIds, webMode, ragMode, images: cleanImages, pinnedMemories, unrestricted: unrestrictedMode }),
+      rawResponse: true,
     });
     setPinnedMemories([]); // Clear after send
-
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({ error: "PARALLEL_STREAM_CRASH" }));
-      const errMsg = errorData.error || `OLLAMA_HTTP_${res.status}`;
-      addLog(`❌ PARALLEL_ERROR: ${errMsg}`, "sys");
-      pushLocalMessage({ role: "assistant", content: `❌ SYSTEM_FAILURE: ${errMsg}`, model: "LOGOS_CORE" });
-      setVisionBuffer([]);
-      return;
-    }
 
     setVisionBuffer([]);
     addLog(`START_PARALLEL: ${ms.join(", ")}`, "sys");
@@ -1263,9 +1213,8 @@ export default function App() {
     const blocks = [];
     let current = null;
     const cleanImages = visionBuffer.map(img => img.includes("base64,") ? img.split("base64,")[1] : img);
-    const res = await fetch(`${API}/chat/debate/${currentSession.id}`, {
+    const res = await apiFetch(`/chat/debate/${currentSession.id}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         prompt,
         personaIds: selectedPersonaIds,
@@ -1275,17 +1224,9 @@ export default function App() {
         pinnedMemories,
         unrestricted: unrestrictedMode
       }),
+      rawResponse: true,
     });
     setPinnedMemories([]); // Clear after send
-
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({ error: "DEBATE_STREAM_CRASH" }));
-      const errMsg = errorData.error || `OLLAMA_HTTP_${res.status}`;
-      addLog(`❌ DEBATE_ERROR: ${errMsg}`, "sys");
-      pushLocalMessage({ role: "assistant", content: `❌ SYSTEM_FAILURE: ${errMsg}`, model: "LOGOS_CORE" });
-      setVisionBuffer([]);
-      return;
-    }
 
     setVisionBuffer([]);
     addLog(`START_DEBATE: ${ms.join(" vs ")}`, "sys");
@@ -1356,21 +1297,12 @@ export default function App() {
     let currentStage = null;
 
     const cleanImages = visionBuffer.map(img => img.includes("base64,") ? img.split("base64,")[1] : img);
-    const res = await fetch(`${API}/chat/collaborate/${currentSession.id}`, {
+    const res = await apiFetch(`/chat/collaborate/${currentSession.id}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt, personaIds: selectedPersonaIds, webMode, ragMode, images: cleanImages, pinnedMemories, unrestricted: unrestrictedMode }),
+      rawResponse: true,
     });
     setPinnedMemories([]); // Clear after send
-
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({ error: "COLLABORATE_STREAM_CRASH" }));
-      const errMsg = errorData.error || `OLLAMA_HTTP_${res.status}`;
-      addLog(`❌ COLLABORATE_ERROR: ${errMsg}`, "sys");
-      pushLocalMessage({ role: "assistant", content: `❌ SYSTEM_FAILURE: ${errMsg}`, model: "LOGOS_CORE" });
-      setVisionBuffer([]);
-      return;
-    }
 
     setVisionBuffer([]);
     const startTime = Date.now();
@@ -1416,9 +1348,8 @@ export default function App() {
     addLog(`SYNAPSE: Initiating pipeline [${synapsePreset}]`, "sys");
 
     const cleanImages = visionBuffer.map(img => img.includes("base64,") ? img.split("base64,")[1] : img);
-    const res = await fetch(`${API}/chat/pipeline/${currentSession.id}`, {
+    const res = await apiFetch(`/chat/pipeline/${currentSession.id}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
         prompt, 
         presetKey: synapsePreset, 
@@ -1429,20 +1360,13 @@ export default function App() {
         unrestricted: unrestrictedMode,
         personaIds: selectedPersonaIds
       }),
+      rawResponse: true,
     });
-    
+
     // Signal Check: Ensure the persona mind is being transmitted
     console.log(`🔌 LOGOS_SYNAPSE -> Initiating Assembly Line with Personas: ${selectedPersonaIds.length > 0 ? selectedPersonaIds.join(', ') : "NONE"}`);
-    
-    setPinnedMemories([]);
 
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({ error: "PIPELINE_CRASH" }));
-      addLog(`❌ PIPELINE_ERROR: ${errorData.error}`, "sys");
-      pushLocalMessage({ role: "assistant", content: `❌ SYSTEM_FAILURE: ${errorData.error}`, model: "LOGOS_CORE" });
-      setVisionBuffer([]);
-      return;
-    }
+    setPinnedMemories([]);
 
     setVisionBuffer([]);
     const startTime = Date.now();
@@ -1498,9 +1422,8 @@ export default function App() {
     addLog(`START_SCENARIO: ${scenario.name}`, "sys");
     const cleanImages = visionBuffer.map(img => img.includes("base64,") ? img.split("base64,")[1] : img);
 
-    const res = await fetch(`${API}/chat/scenario/${currentSession.id}`, {
+    const res = await apiFetch(`/chat/scenario/${currentSession.id}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         prompt,
         scenarioId: selectedScenarioId,
@@ -1512,13 +1435,9 @@ export default function App() {
         hiddenIntents: { ...hiddenIntents, ...(scenario.hiddenIntents || {}) }, // Scenario intents override manual ones
         roleModelMap
       }),
+      rawResponse: true,
     });
 
-    if (!res.ok) {
-      addLog(`❌ SCENARIO_ERROR: ${res.status}`, "sys");
-      setVisionBuffer([]);
-      return;
-    }
     setVisionBuffer([]);
 
     setVisionBuffer([]);
@@ -1565,12 +1484,12 @@ export default function App() {
     if (!currentSession) return;
     addLog(`TEMPORAL_SNAPSHOT: Initiating branch from "${currentSession.title}"...`, "sys");
     try {
-      const res = await fetch(`${API}/session/${currentSession.id}/snapshot`, { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
+      const res = await apiFetch(`/session/${currentSession.id}/snapshot`, { method: "POST" });
+      {
+        const data = res;
         // Force refresh session list and select new branch
-        const sessionsRes = await fetch(`${API}/sessions`);
-        const allSessions = await sessionsRes.json();
+        const sessionsRes = await apiFetch(`/sessions`);
+        const allSessions = sessionsRes;
         setSessions(allSessions);
         const newSess = allSessions.find(s => s.id === data.id);
         if (newSess) setCurrentSession(newSess);
@@ -1587,9 +1506,9 @@ export default function App() {
     setEvaluation(null);
     addLog(`NARRATIVE_AUDIT: Initiating AI evaluation of reality stream...`, "sys");
     try {
-      const res = await fetch(`${API}/chat/evaluate/${currentSession.id}`, { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
+      const res = await apiFetch(`/chat/evaluate/${currentSession.id}`, { method: "POST" });
+      {
+        const data = res;
         setEvaluation(data);
         addLog(`AUDIT_COMPLETE: Fidelity Score ${data.fidelity || 'N/A'}/10`, "sys");
       }
@@ -1607,18 +1526,15 @@ export default function App() {
     setIsSyncingMemory(true);
     addLog(null, `🧠 MEMORY_SYNC: Initiating uplink for index ${globalIndex}...`, "sys");
     try {
-      const res = await fetch(`${API}/memory/edit`, {
+      const res = await apiFetch(`/memory/edit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ index: globalIndex, text: editNodeText })
       });
-      if (res.ok) {
+      {
         addLog(null, `✅ SYNC_COMPLETE: Vector stabilization successful.`, "sys");
         // Refresh vectors to show new position
         fetchVectors();
         setSelectedNode(null);
-      } else {
-        throw new Error("Sync failed at backend boundary");
       }
     } catch (e) {
       addLog(null, `❌ SYNC_ERROR: ${e.message}`, "err");
@@ -1634,8 +1550,8 @@ export default function App() {
     const globalIndex = selectedNode.id.split('-')[1];
     addLog(null, `🔥 MEMORY_PRUNE: Deleting node ${globalIndex}...`, "sys");
     try {
-      const res = await fetch(`${API}/memory/${globalIndex}`, { method: "DELETE" });
-      if (res.ok) {
+      const res = await apiFetch(`/memory/${globalIndex}`, { method: "DELETE" });
+      {
         addLog(null, `✅ PRUNE_SUCCESS: Node purged from neural substrate.`, "sys");
         fetchVectors();
         setSelectedNode(null);
@@ -1650,13 +1566,11 @@ export default function App() {
     if (!window.confirm(`☢️ CRITICAL: Wipe ALL memories for "${personaName}"? This is irreversible.`)) return;
     addLog(`☢️ MEMORY_WIPE: Initiating for persona ${personaId}...`, "sys");
     try {
-      const res = await fetch(`${API}/memory/persona/${personaId}/wipe`, { method: "DELETE" });
-      if (res.ok) {
-        const data = await res.json();
+      const res = await apiFetch(`/memory/persona/${personaId}/wipe`, { method: "DELETE" });
+      {
+        const data = res;
         addLog(`✅ WIPE_COMPLETE: ${data.wiped || 0} memory records purged.`, "sys");
         fetchVectors();
-      } else {
-        throw new Error(`HTTP_${res.status}`);
       }
     } catch (e) {
       addLog(`❌ WIPE_ERROR: ${e.message}`, "err");
@@ -1782,6 +1696,7 @@ export default function App() {
       )}
 
       <main className="chat-area">
+        <h1 style={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>Local AI Chat</h1>
         {/* ─── Header / Controls (hidden in Agent Desk) ─── */}
         {activeView !== 'agent-desk' && (
           <ChatHeader
@@ -1936,6 +1851,7 @@ export default function App() {
         <SystemHUD 
           sysStats={sysStats} 
           onOpenDbManager={() => setShowDbManager(true)}
+          databaseAdminEnabled={true}
         />
         <MetricsPanel metrics={metrics} isStreaming={isStreaming} />
         <IcarusToolBelt handleManualTool={handleManualTool} />

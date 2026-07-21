@@ -1,16 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import SolarisIcon from './SolarisIcon';
+import { useAppSettings } from '../hooks/useAppSettings';
 
 const TOOL_META = {
-  executeCommand:      { label: 'SHELL_EXEC',    icon: '⚡', desc: 'Run bash commands in workspace' },
-  readFileTool:        { label: 'FILE_READ',      icon: '📄', desc: 'Read any file by path' },
-  listDirTool:         { label: 'DIR_LIST',       icon: '📁', desc: 'List directory contents' },
-  mempalaceSearch:     { label: 'MEM_SEARCH',     icon: '🧠', desc: 'Search MemPalace (opt-in)' },
-  mempalaceDiaryWrite: { label: 'MEM_WRITE',      icon: '📓', desc: 'Write to memory (opt-in)' },
-  agentWriteFile:      { label: 'FILE_WRITE',     icon: '💾', desc: 'Write code & check syntax' },
+  readFileTool:        { label: 'FILE_READ',      icon: 'scenario', desc: 'Read any file by path' },
+  listDirTool:         { label: 'DIR_LIST',       icon: 'database', desc: 'List directory contents' },
+  mempalaceSearch:     { label: 'MEM_SEARCH',     icon: 'neural', desc: 'Search MemPalace (opt-in)' },
+  mempalaceDiaryWrite: { label: 'MEM_WRITE',      icon: 'evaluation', desc: 'Write to memory (opt-in)' },
+  agentWriteFile:      { label: 'FILE_WRITE',     icon: 'send', desc: 'Write code & check syntax' },
 };
 
 const ALL_TOOLS = Object.keys(TOOL_META);
-const DEFAULT_TOOLS_ARRAY = ['executeCommand', 'readFileTool', 'listDirTool', 'agentWriteFile'];
+const DEFAULT_TOOLS_ARRAY = ['readFileTool', 'listDirTool', 'agentWriteFile'];
 const MAX_LOG_ENTRIES = 20;
 
 // ── Extract file paths from trace events ──
@@ -36,16 +37,16 @@ function TraceNode({ event }) {
   const [collapsed, setCollapsed] = useState(false);
 
   if (event.type === 'agent-status') return (
-    <div className="trace-node trace-status">
-      <span className="trace-icon">⟳</span>
+    <div className="trace-node trace-status glass-panel">
+      <SolarisIcon icon="settings" size={14} className="trace-icon" />
       <span className="trace-msg">{event.msg}</span>
     </div>
   );
 
   if (event.type === 'thought') return (
-    <div className="trace-node trace-thought">
-      <div className="trace-node-header" onClick={() => setCollapsed(c => !c)}>
-        <span className="trace-icon">💭</span>
+    <div className="trace-node trace-thought glass-panel">
+      <div className="trace-node-header" role="button" tabIndex={0} aria-expanded={!collapsed} onClick={() => setCollapsed(c => !c)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setCollapsed(c => !c); } }}>
+        <SolarisIcon icon="neural" size={14} className="trace-icon" />
         <span className="trace-label">THOUGHT</span>
         <span className="trace-collapse-btn">{collapsed ? '▸' : '▾'}</span>
       </div>
@@ -54,11 +55,11 @@ function TraceNode({ event }) {
   );
 
   if (event.type === 'agent-tool-start') {
-    const meta = TOOL_META[event.tool] || { label: event.tool, icon: '🔧' };
+    const meta = TOOL_META[event.tool] || { label: event.tool, icon: 'terminal' };
     return (
-      <div className="trace-node trace-tool-start">
-        <div className="trace-node-header" onClick={() => setCollapsed(c => !c)}>
-          <span className="trace-icon">{meta.icon}</span>
+      <div className="trace-node trace-tool-start glass-panel">
+        <div className="trace-node-header" role="button" tabIndex={0} aria-expanded={!collapsed} onClick={() => setCollapsed(c => !c)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setCollapsed(c => !c); } }}>
+          <SolarisIcon icon={meta.icon} size={14} className="trace-icon" />
           <span className="trace-tool-badge">{meta.label}</span>
           <span className="trace-label-dim">TOOL_INVOKE</span>
           <span className="trace-collapse-btn">{collapsed ? '▸' : '▾'}</span>
@@ -74,12 +75,12 @@ function TraceNode({ event }) {
   }
 
   if (event.type === 'agent-tool-result') {
-    const meta = TOOL_META[event.tool] || { label: event.tool, icon: '🔧' };
+    const meta = TOOL_META[event.tool] || { label: event.tool, icon: 'terminal' };
     const isErr = event.result?.success === false;
     return (
-      <div className={`trace-node ${isErr ? 'trace-tool-error' : 'trace-tool-result'}`}>
-        <div className="trace-node-header" onClick={() => setCollapsed(c => !c)}>
-          <span className="trace-icon">{isErr ? '❌' : '✅'}</span>
+      <div className={`trace-node glass-panel ${isErr ? 'trace-tool-error' : 'trace-tool-result'}`}>
+        <div className="trace-node-header" role="button" tabIndex={0} aria-expanded={!collapsed} onClick={() => setCollapsed(c => !c)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setCollapsed(c => !c); } }}>
+          <SolarisIcon icon={isErr ? 'close' : 'agent'} size={14} className="trace-icon" />
           <span className="trace-tool-badge">{meta.label}</span>
           <span className="trace-label-dim">RESULT</span>
           <span className="trace-collapse-btn">{collapsed ? '▸' : '▾'}</span>
@@ -94,8 +95,8 @@ function TraceNode({ event }) {
   }
 
   if (event.type === 'agent-error') return (
-    <div className="trace-node trace-error">
-      <span className="trace-icon">🔴</span>
+    <div className="trace-node trace-error glass-panel">
+      <SolarisIcon icon="close" size={14} className="trace-icon" />
       <span className="trace-msg">{event.content}</span>
     </div>
   );
@@ -111,8 +112,12 @@ function MissionLogEntry({ entry, onView, onDelete, isActive }) {
 
   return (
     <div
-      className={`mission-log-entry${isActive ? ' mission-log-entry--active' : ''}`}
+      className={`mission-log-entry glass-panel${isActive ? ' mission-log-entry--active' : ''}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open mission: ${entry.goal}`}
       onClick={() => onView(entry)}
+      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onView(entry); } }}
     >
       <div className="mle-header">
         <span className="mle-date">{dateStr} {timeStr}</span>
@@ -121,13 +126,17 @@ function MissionLogEntry({ entry, onView, onDelete, isActive }) {
           className="mle-delete"
           onClick={e => { e.stopPropagation(); onDelete(entry.id); }}
           title="Delete log entry"
-        >×</button>
+        >
+          <SolarisIcon icon="close" size={12} />
+        </button>
       </div>
       <div className="mle-goal">{entry.goal.slice(0, 80)}{entry.goal.length > 80 ? '…' : ''}</div>
       {entry.filesWritten.length > 0 && (
         <div className="mle-files">
           {entry.filesWritten.slice(0, 3).map((f, i) => (
-            <span key={i} className="mle-file-chip">📄 {f.split(/[/\\]/).pop()}</span>
+            <span key={i} className="mle-file-chip">
+              <SolarisIcon icon="scenario" size={10} /> {f.split(/[/\\]/).pop()}
+            </span>
           ))}
           {entry.filesWritten.length > 3 && (
             <span className="mle-file-chip mle-file-more">+{entry.filesWritten.length - 3}</span>
@@ -142,15 +151,19 @@ function MissionLogEntry({ entry, onView, onDelete, isActive }) {
   );
 }
 
+// Helper to check if file is visual/renderable
+const isPreviewableFile = (name) => {
+  if (!name) return false;
+  const ext = name.split('.').pop().toLowerCase();
+  return ['html', 'htm', 'svg', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'].includes(ext);
+};
+
 // ── Main Component ──
 export default function AgentDesk({ personas = [], API, darkMode, onExit, activeSession }) {
+  const { getSetting, updateSetting } = useAppSettings();
+
   const getPersisted = (key, fallback) => {
-    try {
-      const val = localStorage.getItem(`agent_desk_${key}`);
-      return val ? JSON.parse(val) : fallback;
-    } catch (e) {
-      return fallback;
-    }
+    return getSetting(`agent_desk_${key}`, fallback);
   };
 
   // Config state
@@ -184,13 +197,30 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
   const [agentFiles, setAgentFiles]     = useState([]);
   const [activeFileContent, setActiveFileContent] = useState(null); // {name, content}
 
+  const [previewTab, setPreviewTab] = useState('code'); // 'code' | 'preview'
+  const [viewportMode, setViewportMode] = useState('responsive'); // 'desktop' | 'tablet' | 'mobile' | 'responsive'
+  const [iframeLoading, setIframeLoading] = useState(false);
+  const [iframeKey, setIframeKey] = useState(0);
+
+  // Auto-select best tab when active file changes
+  useEffect(() => {
+    if (activeFileContent) {
+      if (isPreviewableFile(activeFileContent.name)) {
+        setPreviewTab('preview');
+        setIframeLoading(true);
+      } else {
+        setPreviewTab('code');
+      }
+    }
+  }, [activeFileContent?.name]);
+
+  const handleRefreshIframe = () => {
+    setIframeLoading(true);
+    setIframeKey(prev => prev + 1);
+  };
+
   // ── Option A: Mission Log ──
-  const [missionLog, setMissionLog] = useState(() => {
-    try {
-      const saved = localStorage.getItem('agent_desk_mission_log');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
+  const [missionLog, setMissionLog] = useState(() => getSetting('agent_desk_mission_log', []));
   const [showMissionLog, setShowMissionLog]   = useState(false);
   const [activeMission, setActiveMission]     = useState(null); // viewing past mission
 
@@ -202,17 +232,17 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
 
   // Persist config
   useEffect(() => {
-    localStorage.setItem('agent_desk_personaId',    JSON.stringify(selectedPersonaId));
-    localStorage.setItem('agent_desk_tools',        JSON.stringify([...allowedTools]));
-    localStorage.setItem('agent_desk_maxLoops',     JSON.stringify(maxLoops));
-    localStorage.setItem('agent_desk_includeContext', JSON.stringify(includeChatContext));
+    updateSetting('agent_desk_personaId', selectedPersonaId);
+    updateSetting('agent_desk_tools', [...allowedTools]);
+    updateSetting('agent_desk_maxLoops', maxLoops);
+    updateSetting('agent_desk_includeContext', includeChatContext);
   }, [selectedPersonaId, allowedTools, maxLoops, includeChatContext]);
 
   // Fetch Agent Files
   const fetchAgentFiles = async () => {
-    if (!activeSession || !activeSession._id) return;
+    if (!activeSession || !activeSession.id) return;
     try {
-      const res = await fetch(`/api/session/${activeSession._id}/agent-files`);
+      const res = await fetch(`/api/session/${activeSession.id}/agent-files`);
       if (res.ok) {
         setAgentFiles(await res.json());
       }
@@ -221,7 +251,7 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
 
   useEffect(() => {
     fetchAgentFiles();
-  }, [activeSession?._id, traceEvents.length]); // polls when trace gets longer
+  }, [activeSession?.id, traceEvents.length]); // polls when trace gets longer
 
   function toggleTool(tool) {
     setAllowedTools(prev => {
@@ -233,7 +263,7 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
 
   const handlePreviewArtifact = async (filename) => {
     try {
-      const res = await fetch(`/api/session/${activeSession._id}/agent-files/${filename}/content`);
+      const res = await fetch(`/api/session/${activeSession.id}/agent-files/${filename}/content`);
       if (res.ok) {
         const data = await res.json();
         setActiveFileContent({ name: filename, content: data.content });
@@ -242,7 +272,7 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
   };
 
   const handleDownloadArtifact = (filename) => {
-    window.open(`/api/session/${activeSession._id}/agent-files/${filename}/download`, '_blank');
+    window.open(`/api/session/${activeSession.id}/agent-files/${filename}/download`, '_blank');
   };
 
   // ── Option B: Critique mode — inject prior answer into history ──
@@ -349,7 +379,7 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
         };
         setMissionLog(prev => {
           const updated = [entry, ...prev].slice(0, MAX_LOG_ENTRIES);
-          localStorage.setItem('agent_desk_mission_log', JSON.stringify(updated));
+          updateSetting('agent_desk_mission_log', updated);
           return updated;
         });
       }
@@ -406,7 +436,7 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
   function deleteLogEntry(id) {
     setMissionLog(prev => {
       const updated = prev.filter(e => e.id !== id);
-      localStorage.setItem('agent_desk_mission_log', JSON.stringify(updated));
+      updateSetting('agent_desk_mission_log', updated);
       return updated;
     });
     if (activeMission?.id === id) setActiveMission(null);
@@ -414,7 +444,7 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
 
   function clearAllLog() {
     setMissionLog([]);
-    localStorage.removeItem('agent_desk_mission_log');
+    updateSetting('agent_desk_mission_log', []);
     setActiveMission(null);
   }
 
@@ -433,32 +463,32 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
     <div className={`agent-desk${darkMode ? ' dark-mode' : ''}`}>
 
       {/* ── DESK HEADER ── */}
-      <div className="agent-desk-header">
+      <div className="agent-desk-header glass-panel">
         <div className="agent-desk-title">
           {onExit && (
             <button className="agent-back-btn" onClick={onExit} title="Return to Chat">
-              ← CHAT
+              <SolarisIcon icon="chat" size={14} /> CHAT
             </button>
           )}
-          <span className="agent-desk-icon">⚙️</span>
+          <SolarisIcon icon="settings" size={18} className="agent-desk-icon" />
           <span>AGENTIC_OPERATIONS_DESK</span>
-          <span className="hardware-id">// LOGOS_LOOP_ENGINE v2.2</span>
+          <span className="hardware-id">// SOLARIS_LOOP_ENGINE v3.0</span>
         </div>
         <div className="header-actions">
           {/* Mission Log Toggle */}
           <button
-            className={`agent-log-btn${showMissionLog ? ' active' : ''}`}
+            className={`agent-log-btn glass-panel${showMissionLog ? ' active' : ''}`}
             onClick={() => { setShowMissionLog(s => !s); setActiveMission(null); }}
             title={`Mission Log (${missionLog.length})`}
           >
-            📋 LOG_{missionLog.length}
+            <SolarisIcon icon="database" size={14} /> LOG_{missionLog.length}
           </button>
-          <button className="agent-wipe-btn" onClick={wipeMission} disabled={isRunning} title="Clear mission state">
-            清 WIPE_STATE
+          <button className="agent-wipe-btn glass-panel" onClick={wipeMission} disabled={isRunning} title="Clear mission state">
+            <SolarisIcon icon="trash" size={14} /> WIPE_STATE
           </button>
           {isRunning && (
-            <button className="agent-abort-btn" onClick={abortAgent}>
-              ⏹ ABORT_MISSION
+            <button className="agent-abort-btn glass-panel" onClick={abortAgent}>
+              <SolarisIcon icon="close" size={14} /> ABORT_MISSION
             </button>
           )}
         </div>
@@ -467,8 +497,8 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
       <div className="agent-desk-body">
 
         {/* ══ PANEL 1 — TASK CONFIGURATOR ══ */}
-        <section className="agent-panel task-configurator">
-          <div className="agent-panel-label">01 // TASK_CONFIGURATOR</div>
+        <section className="agent-panel task-configurator glass-panel">
+          <div className="agent-panel-label"><SolarisIcon icon="settings" size={10} /> 01 // TASK_CONFIGURATOR</div>
 
           <div className="agent-field">
             <label className="agent-field-label">NEW_MISSION_OBJECTIVE</label>
@@ -500,12 +530,12 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
             <div className="agent-field agent-field-half">
               <label className="agent-field-label">ENTITY_CORE</label>
               <select
-                className="agent-select"
+                className="agent-select glass-panel"
                 value={selectedPersonaId}
                 onChange={e => setSelectedPersonaId(e.target.value)}
                 disabled={isRunning}
               >
-                <option value="">⚡ Auto (AXON Agent)</option>
+                <option value=""><SolarisIcon icon="neural" size={10} /> Auto (AXON Agent)</option>
                 {personas.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
@@ -539,12 +569,12 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
                   <button
                     key={tool}
                     type="button"
-                    className={`tool-toggle ${enabled ? 'tool-on' : 'tool-off'}`}
+                    className={`tool-toggle glass-panel ${enabled ? 'tool-on' : 'tool-off'}`}
                     onClick={() => toggleTool(tool)}
                     disabled={isRunning}
                     title={meta.desc}
                   >
-                    <span className="tool-toggle-icon">{meta.icon}</span>
+                    <SolarisIcon icon={meta.icon} size={14} className="tool-toggle-icon" />
                     <span className="tool-toggle-label">{meta.label}</span>
                   </button>
                 );
@@ -553,11 +583,11 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
           </div>
 
           <button
-            className={`agent-dispatch-btn ${isRunning ? 'agent-dispatch-running' : ''}`}
+            className={`agent-dispatch-btn commit-glow-btn ${isRunning ? 'agent-dispatch-running' : ''}`}
             onClick={() => dispatchAgent(false)}
             disabled={!goal.trim() || isRunning}
           >
-            {isRunning ? 'EXECUTING...' : '⚡ DISPATCH_AGENT'}
+            {isRunning ? 'EXECUTING...' : <><SolarisIcon icon="neural" size={14} /> DISPATCH_AGENT</>}
           </button>
         </section>
 
@@ -566,12 +596,12 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
 
           {/* ── MISSION LOG VIEW ── */}
           {showMissionLog ? (
-            <section className="agent-panel mission-log-panel" style={{ height: '100%' }}>
+            <section className="agent-panel mission-log-panel glass-panel" style={{ height: '100%' }}>
               <div className="agent-panel-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>05 // MISSION_LOG ({missionLog.length}/{MAX_LOG_ENTRIES})</span>
+                <span><SolarisIcon icon="database" size={10} /> 05 // MISSION_LOG ({missionLog.length}/{MAX_LOG_ENTRIES})</span>
                 {missionLog.length > 0 && (
-                  <button className="mle-clear-all" onClick={clearAllLog} title="Clear all log entries">
-                    🗑 CLEAR_ALL
+                  <button className="mle-clear-all glass-panel" onClick={clearAllLog} title="Clear all log entries">
+                    <SolarisIcon icon="trash" size={12} /> CLEAR_ALL
                   </button>
                 )}
               </div>
@@ -626,19 +656,106 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
             </section>
           ) : (
             <>
+              {/* EXPORT PROGRESS OVERLAY */}
+              <ExportProgressOverlay events={traceEvents} />
+
               {/* FILE PREVIEW OVERLAY */}
               {activeFileContent && (
-                <div className="agent-file-preview-overlay" style={{ position: 'absolute', inset: 0, background: '#0a0a0c', zIndex: 50, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #1f1f23' }}>
-                   <div className="agent-panel-label" style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#121217', borderBottom: '1px solid #333' }}>
-                      <span>📄 CODE_VERIFIED // {activeFileContent.name}</span>
-                      <button onClick={() => setActiveFileContent(null)} style={{ background: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer', fontFamily: 'monospace' }}>[X] CLOSE</button>
+                <div className="agent-file-preview-overlay glass-panel" style={{ position: 'absolute', inset: 0, background: 'var(--solaris-void)', zIndex: 50, display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border)' }}>
+                   {/* Upper Panel Label and Close controls */}
+                   <div className="agent-panel-label" style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 15px', background: 'var(--solaris-void)', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <SolarisIcon icon="data" size={12} style={{ color: 'var(--solaris-gold)' }} />
+                        <span style={{ color: 'var(--solaris-gold)' }}>CODE_VERIFIED // {activeFileContent.name}</span>
+                      </div>
+                      <button onClick={() => setActiveFileContent(null)} style={{ background: 'transparent', border: 'none', color: 'var(--error)', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '10px' }}>[X] CLOSE_PREVIEW</button>
                    </div>
-                   <div className="artifact-scroll-area custom-scrollbar" style={{ flex: 1, padding: '15px', overflowY: 'auto' }}>
-                      <pre className="artifact-pre" style={{ margin: 0, fontFamily: "'JetBrains Mono', Courier, monospace", fontSize: '13px', lineHeight: '1.4' }}>{activeFileContent.content}</pre>
-                   </div>
-                   <div className="artifact-footer" style={{ borderTop: '1px solid #333', padding: '10px', display: 'flex', justifyContent: 'flex-end', gap: '10px', background: '#121217' }}>
-                      <button className="artifact-btn" onClick={() => handleDownloadArtifact(activeFileContent.name)}>⬇ DOWNLOAD_SOURCE</button>
-                   </div>
+
+                   {/* Navigation / Mode Tab Header */}
+                   {isPreviewableFile(activeFileContent.name) && (
+                     <div className="preview-tabs-container">
+                       <button className={`preview-tab-btn ${previewTab === 'preview' ? 'active' : ''}`} onClick={() => setPreviewTab('preview')}>
+                         👁️ LIVE_PREVIEW
+                       </button>
+                       <button className={`preview-tab-btn ${previewTab === 'code' ? 'active' : ''}`} onClick={() => setPreviewTab('code')}>
+                         📝 SOURCE_CODE
+                       </button>
+                     </div>
+                   )}
+
+                   {/* Render Area */}
+                   {previewTab === 'code' ? (
+                     <>
+                       <div className="artifact-scroll-area custom-scrollbar" style={{ flex: 1, padding: '15px', overflowY: 'auto' }}>
+                          <pre className="artifact-pre" style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: '13px', lineHeight: '1.4', color: 'var(--solaris-gold)' }}>{activeFileContent.content}</pre>
+                       </div>
+                       <div className="artifact-footer" style={{ borderTop: '1px solid var(--border)', padding: '10px', display: 'flex', justifyContent: 'flex-end', gap: '10px', background: 'var(--solaris-void)' }}>
+                          <button className="artifact-btn commit-glow-btn" onClick={() => handleDownloadArtifact(activeFileContent.name)}>
+                            <SolarisIcon icon="data" size={12} /> DOWNLOAD_SOURCE
+                          </button>
+                       </div>
+                     </>
+                   ) : (
+                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                       {/* Dynamic Device Toolbar */}
+                       <div className="preview-toolbar">
+                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                           <button className="preview-btn" onClick={handleRefreshIframe}>
+                             <SolarisIcon icon="settings" size={12} className={iframeLoading ? "spin" : ""} />
+                             REFRESH
+                           </button>
+                           <div className="preview-address-bar">
+                             <span style={{ color: 'var(--text-dim)', marginRight: '6px' }}>GET</span>
+                             {`/uploads/${activeSession.id}/agent_files/${activeFileContent.name}`}
+                           </div>
+                         </div>
+
+                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                           <div className="preview-viewport-group">
+                             <button className={`preview-viewport-btn ${viewportMode === 'mobile' ? 'active' : ''}`} onClick={() => setViewportMode('mobile')}>
+                               📱 PHONE
+                             </button>
+                             <button className={`preview-viewport-btn ${viewportMode === 'tablet' ? 'active' : ''}`} onClick={() => setViewportMode('tablet')}>
+                               📐 TABLET
+                             </button>
+                             <button className={`preview-viewport-btn ${viewportMode === 'desktop' ? 'active' : ''}`} onClick={() => setViewportMode('desktop')}>
+                               💻 DESKTOP
+                             </button>
+                             <button className={`preview-viewport-btn ${viewportMode === 'responsive' ? 'active' : ''}`} onClick={() => setViewportMode('responsive')}>
+                               🔄 FILL
+                             </button>
+                           </div>
+
+                           <button className="preview-btn" onClick={() => window.open(`/uploads/${activeSession.id}/agent_files/${activeFileContent.name}`, '_blank')}>
+                             🌐 OPEN_NEW_TAB
+                           </button>
+                         </div>
+                       </div>
+
+                       {/* Viewport Frame Sandbox Container */}
+                       <div className="preview-sandbox-viewport-container">
+                         {iframeLoading && (
+                           <div className="preview-loader-overlay">
+                             <div className="preview-loader-spinner" />
+                             <div>RENDER_STREAM_INITIALIZING...</div>
+                           </div>
+                         )}
+                         
+                         <div className={`device-frame-wrapper ${viewportMode}`}>
+                           {/* Cyber Laser Scanline overlay for high aesthetic render status */}
+                           {iframeLoading && <div className="preview-scanline" />}
+                           
+                           <iframe
+                             key={iframeKey}
+                             src={`/uploads/${activeSession.id}/agent_files/${activeFileContent.name}`}
+                             sandbox="allow-scripts allow-forms allow-popups"
+                             style={{ width: '100%', height: '100%', border: 'none', background: '#ffffff', display: 'block' }}
+                             onLoad={() => setIframeLoading(false)}
+                           />
+                         </div>
+                       </div>
+                     </div>
+                   )}
                 </div>
               )}
 
@@ -717,16 +834,21 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
               </section>
 
               {/* ── PANEL 4 — AGENT FILES/ARTIFACTS ── */}
-              <section className="agent-panel artifact-panel" style={{ flex: '0 0 auto', maxHeight: '20vh', minHeight: '80px' }}>
-                <div className="agent-panel-label" style={{ color: '#00f0ff' }}>04 // SESSION_ARTIFACTS (AUTO-VERIFIED)</div>
+              <section className="agent-panel artifact-panel glass-panel" style={{ flex: '0 0 auto', maxHeight: '20vh', minHeight: '80px' }}>
+                <div className="agent-panel-label" style={{ color: 'var(--solaris-gold)' }}>
+                  <SolarisIcon icon="data" size={10} /> 04 // SESSION_ARTIFACTS (AUTO-VERIFIED)
+                </div>
                 <div className="artifact-scroll-area custom-scrollbar" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '10px' }}>
                   {agentFiles.length === 0 ? (
-                    <div className="trace-empty" style={{ margin: 0, color: '#5A6066' }}>No auto-verified artifacts generated in this session yet.</div>
+                    <div className="trace-empty" style={{ margin: 0, color: 'var(--text-dim)' }}>No auto-verified artifacts generated in this session yet.</div>
                   ) : (
                     agentFiles.map(f => (
-                      <div key={f.name} className="mle-file-chip" title={(f.size / 1024).toFixed(2) + ' KB'} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '6px 10px', border: '1px solid #1f1f23', borderRadius: '4px', background: '#121217' }} onClick={() => handlePreviewArtifact(f.name)}>
-                        📄 {f.name}
-                        <button onClick={(e) => { e.stopPropagation(); handleDownloadArtifact(f.name); }} title="Download" style={{ background: 'none', border: 'none', color: '#00f0ff', cursor: 'pointer', outline: 'none' }}>⬇</button>
+                      <div key={f.name} className="mle-file-chip glass-panel" title={(f.size / 1024).toFixed(2) + ' KB'} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '6px 10px' }} onClick={() => handlePreviewArtifact(f.name)}>
+                        <SolarisIcon icon="scenario" size={12} style={{ color: 'var(--solaris-gold)' }} />
+                        <span style={{ fontSize: '11px', color: 'var(--solaris-gold)' }}>{f.name}</span>
+                        <button onClick={(e) => { e.stopPropagation(); handleDownloadArtifact(f.name); }} title="Download" style={{ background: 'none', border: 'none', color: 'var(--solaris-gold)', cursor: 'pointer', outline: 'none', display: 'flex', alignItems: 'center' }}>
+                          <SolarisIcon icon="data" size={10} />
+                        </button>
                       </div>
                     ))
                   )}
@@ -735,6 +857,68 @@ export default function AgentDesk({ personas = [], API, darkMode, onExit, active
 
             </>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Export Progress Overlay ──
+function ExportProgressOverlay({ events }) {
+  const currentOp = useMemo(() => {
+    const lastStart = [...events].reverse().find(e => e.type === 'agent-tool-start' && e.tool === 'agentWriteFile');
+    if (!lastStart) return null;
+
+    const hasFinished = events.some(e => 
+      e.type === 'agent-tool-result' && 
+      e.tool === 'agentWriteFile' && 
+      e.id === lastStart.id // if we added IDs, or just check timestamp/order
+    );
+
+    // If there's a start without a subsequent result, it's in progress
+    // Finding the specific one is easier if we just look at the last one
+    const lastResult = [...events].reverse().find(e => e.type === 'agent-tool-result' && e.tool === 'agentWriteFile');
+    
+    // Simplistic check: if the last tool start was agentWriteFile and there's no result for it yet
+    const lastEvent = events[events.length - 1];
+    const isWriting = lastStart && (!lastResult || events.indexOf(lastStart) > events.indexOf(lastResult));
+
+    if (!isWriting) return null;
+
+    return {
+      path: lastStart.args?.path || 'file',
+      step: events.length // use this for some pseudo-animation
+    };
+  }, [events]);
+
+  if (!currentOp) return null;
+
+  return (
+    <div className="export-overlay">
+      <div className="export-modal glass-panel">
+        <div className="export-header">
+          <SolarisIcon icon="send" size={16} className="export-icon pulse" />
+          <div className="export-title">SYNAPSE_EXPORT_PROTOCOL</div>
+        </div>
+        
+        <div className="export-path">
+          <span className="export-path-label">TARGET:</span>
+          <span className="export-path-val">{currentOp.path}</span>
+        </div>
+
+        <div className="export-progress-container">
+          <div className="export-progress-bar">
+            <div className="export-progress-fill animate-progress" />
+          </div>
+          <div className="export-status-line">
+            <span className="status-text">WRITING_CHUNKS...</span>
+            <span className="status-pct">SYNCING</span>
+          </div>
+        </div>
+
+        <div className="export-details">
+          NEURAL_SYNAPSE is committing architectural changes to the local filesystem.
+          Integrity check will follow.
         </div>
       </div>
     </div>

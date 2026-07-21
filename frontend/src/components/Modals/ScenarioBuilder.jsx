@@ -1,4 +1,6 @@
 import React from 'react';
+import FocusTrap from 'focus-trap-react';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 const ScenarioBuilder = ({
   showScenarioBuilder,
@@ -10,14 +12,16 @@ const ScenarioBuilder = ({
   handleSaveScenario,
   deleteScenario
 }) => {
+  useEscapeKey(showScenarioBuilder, () => setShowScenarioBuilder(false));
   if (!showScenarioBuilder) return null;
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content forge-modal">
+    <FocusTrap focusTrapOptions={{ initialFocus: false, escapeDeactivates: false, clickOutsideDeactivates: false, fallbackFocus: '.modal-content' }}>
+      <div className="modal-overlay">
+      <div className="modal-content forge-modal" role="dialog" aria-modal="true" aria-label="Scenario builder">
         <div className="modal-header">
           <h2>{editingScenario ? "🔧 Modify Simulation" : "🚀 Architect Scenario"}</h2>
-          <button className="close-btn" onClick={() => setShowScenarioBuilder(false)}>×</button>
+          <button type="button" aria-label="Close" className="close-btn" onClick={() => setShowScenarioBuilder(false)}>×</button>
         </div>
         <div className="forge-form">
           <div className="form-group">
@@ -158,6 +162,7 @@ const ScenarioBuilder = ({
         </div>
       </div>
     </div>
+    </FocusTrap>
   );
 };
 

@@ -1,36 +1,21 @@
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs/promises";
 import path from "path";
 import { searchPalace, mineConversation, toWingSlug } from "../services/mempalaceBridge.js";
 
-const execAsync = promisify(exec);
+import { resolveSafePath } from "./pathResolver.js";
 
-// Safety: Constraint to prevent destructive commands in the Root OS. 
-// Commands will execute starting from the backend runtime environment.
+const execFileAsync = promisify(execFile);
+
+// All agent filesystem operations are rooted in the backend runtime workspace.
 const APP_ROOT = process.cwd();
-
-export async function executeCommand({ command }) {
-    console.log(`🤖 AGENT TOOL: Executing [${command}]`);
-    try {
-        const { stdout, stderr } = await execAsync(command, { 
-            cwd: APP_ROOT, 
-            timeout: 15000 // 15 seconds max execution block
-        });
-        return { 
-            success: true, 
-            stdout: stdout.trim(), 
-            stderr: stderr.trim() 
-        };
-    } catch (e) {
-        return { success: false, error: e.message };
-    }
-}
+const SAFE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 
 export async function readFileTool({ filePath }) {
     console.log(`🤖 AGENT TOOL: Reading file [${filePath}]`);
     try {
-        const fullPath = path.resolve(APP_ROOT, filePath);
+        const fullPath = resolveSafePath(APP_ROOT, filePath);
         const data = await fs.readFile(fullPath, "utf8");
         return { success: true, content: data };
     } catch (e) {
@@ -41,7 +26,7 @@ export async function readFileTool({ filePath }) {
 export async function listDirTool({ dirPath = "." }) {
     console.log(`🤖 AGENT TOOL: Listing directory [${dirPath}]`);
     try {
-        const fullPath = path.resolve(APP_ROOT, dirPath);
+        const fullPath = resolveSafePath(APP_ROOT, dirPath);
         const files = await fs.readdir(fullPath);
         return { success: true, files };
     } catch (e) {
@@ -72,44 +57,53 @@ export async function mempalaceDiaryWrite({ text, wing, agentName = "Nexus" }) {
 export async function agentWriteFile({ filename, content, sessionId }) {
     if (!sessionId) return { success: false, error: "Missing sessionId scope." };
     if (!filename || !content) return { success: false, error: "Missing filename or content." };
+    if (typeof sessionId !== "string" || !SAFE_SESSION_ID.test(sessionId)) {
+        return { success: false, error: "Security Exception: Invalid session scope." };
+    }
     
     console.log(`🤖 AGENT TOOL: Writing file [${filename}] for session [${sessionId}]`);
     try {
         const UPLOADS_DIR = path.resolve(APP_ROOT, "uploads");
-        const agentDir = path.join(UPLOADS_DIR, sessionId, "agent_files");
-        await fs.mkdir(agentDir, { recursive: true });
+        const agentDir = path.resolve(UPLOADS_DIR, sessionId, "agent_files");
+
+        // Security check for path traversal
+        const requestedPath = resolveSafePath(agentDir, filename);
+
+        const targetDir = path.dirname(requestedPath);
+        await fs.mkdir(targetDir, { recursive: true });
 
         // Versioning logic
-        let finalFilename = filename;
+        let finalFilename = path.basename(filename);
+        let finalPath = requestedPath;
         let counter = 1;
         while (true) {
             try {
-                await fs.access(path.join(agentDir, finalFilename));
+                await fs.access(finalPath);
                 counter++;
                 const ext = path.extname(filename);
                 const base = path.basename(filename, ext);
                 finalFilename = `${base}_v${counter}${ext}`;
+                finalPath = path.join(targetDir, finalFilename);
             } catch (e) {
                 break; // File does not exist, ready to write
             }
         }
 
-        const fullPath = path.join(agentDir, finalFilename);
-        await fs.writeFile(fullPath, content, "utf8");
+        await fs.writeFile(finalPath, content, "utf8");
 
         // Syntax checking logic
         const ext = path.extname(finalFilename).toLowerCase();
         try {
             if (ext === '.py') {
-                await execAsync(`python -m py_compile "${fullPath}"`);
+                await execFileAsync("python", ["-m", "py_compile", finalPath]);
             } else if (ext === '.js') {
-                await execAsync(`node --check "${fullPath}"`);
+                await execFileAsync("node", ["--check", finalPath]);
             } else if (ext === '.json') {
                 JSON.parse(content);
             }
         } catch (syntaxErr) {
             // Delete invalid file to prevent broken artifacts
-            await fs.unlink(fullPath).catch(() => {});
+            await fs.unlink(finalPath).catch(() => {});
             return { 
                 success: false, 
                 error: `Syntax Error in ${filename}. Please correct your code and call agentWriteFile again.\nDetails:\n${syntaxErr.stderr || syntaxErr.message}` 
@@ -123,21 +117,8 @@ export async function agentWriteFile({ filename, content, sessionId }) {
 }
 
 // Ollama Tool Schema export mapped identically to the OpenAI schema spec
+// Enriched with Phase 4 manifest properties for capability service
 export const agentToolsSchema = [
-    {
-        type: "function",
-        function: {
-            name: "executeCommand",
-            description: "Run a bash shell command in the project workspace directory. Useful for grep, ls, node scripts, directory creations.",
-            parameters: {
-                type: "object",
-                properties: {
-                    command: { type: "string", description: "The bash command to execute" }
-                },
-                required: ["command"]
-            }
-        }
-    },
     {
         type: "function",
         function: {
@@ -149,6 +130,13 @@ export const agentToolsSchema = [
                     filePath: { type: "string", description: "Relative path to the file" }
                 },
                 required: ["filePath"]
+            },
+            // Phase 4 Manifest properties
+            manifest: {
+                requiresApproval: false,
+                sideEffect: "read",
+                timeoutMs: 5000,
+                quota: 100
             }
         }
     },
@@ -162,6 +150,12 @@ export const agentToolsSchema = [
                 properties: {
                     dirPath: { type: "string", description: "Relative directory path. E.g., '.' or 'frontend/src'" }
                 }
+            },
+            manifest: {
+                requiresApproval: false,
+                sideEffect: "read",
+                timeoutMs: 5000,
+                quota: 100
             }
         }
     },
@@ -178,6 +172,12 @@ export const agentToolsSchema = [
                     results: { type: "number", description: "Number of results to return (default 5)" }
                 },
                 required: ["query"]
+            },
+            manifest: {
+                requiresApproval: false,
+                sideEffect: "read",
+                timeoutMs: 10000,
+                quota: 50
             }
         }
     },
@@ -193,6 +193,12 @@ export const agentToolsSchema = [
                     wing: { type: "string", description: "The persona wing slug this memory belongs to" }
                 },
                 required: ["text", "wing"]
+            },
+            manifest: {
+                requiresApproval: true,
+                sideEffect: "write",
+                timeoutMs: 15000,
+                quota: 20
             }
         }
     },
@@ -208,16 +214,22 @@ export const agentToolsSchema = [
                     content: { type: "string", description: "The full UTF-8 source code content to write" }
                 },
                 required: ["filename", "content"]
+            },
+            manifest: {
+                requiresApproval: true,
+                sideEffect: "write",
+                timeoutMs: 30000,
+                quota: 10
             }
         }
     }
 ];
 
 export const ToolRegistry = {
-    "executeCommand": executeCommand,
     "readFileTool": readFileTool,
     "listDirTool": listDirTool,
     "mempalaceSearch": mempalaceSearch,
     "mempalaceDiaryWrite": mempalaceDiaryWrite,
     "agentWriteFile": agentWriteFile
 };
+

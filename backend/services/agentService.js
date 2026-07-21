@@ -3,6 +3,12 @@ import { agentToolsSchema, ToolRegistry } from "../utils/tools.js";
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 
+import capabilityService from "./capabilityService.js";
+import * as dbService from "./dbService.js";
+
+// OLLAMA_BASE_URL is handled via process.env
+
+
 /**
  * Executes the OpenClaude-inspired autonomous Tool Loop via Ollama.
  * Connects directly to the active Express Response object (SSE) to update the Terminal UI.
@@ -14,7 +20,8 @@ const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
  * @param {Object} context - { sessionId, saveMessage(role, content), history }
  */
 export async function executeAgenticTask(res, agentModel, systemPrompt, initialUserPrompt, persona, context = {}) {
-    const { sessionId, saveMessage, allowedTools, maxLoops: maxLoopsParam, history = [] } = context;
+    const { sessionId, saveMessage, maxLoops: maxLoopsParam, history = [] } = context;
+    // Note: allowedTools is intentionally not destructured — server owns tool policy via SERVER_ALLOWED_TOOLS.
     console.log(`🤖 AGENT_SERVICE: Starting task for session [${sessionId}] with [${history.length}] context messages`);
     
     let isAborted = false;
@@ -52,11 +59,9 @@ export async function executeAgenticTask(res, agentModel, systemPrompt, initialU
     let loopCount = 0;
     const MAX_LOOPS = maxLoopsParam || 8; // Configurable from AgentDesk; default 8
 
-    // Filter tools if the caller has specified an allowedTools list
-    const toolsToUse = (allowedTools && allowedTools.length > 0)
-        ? agentToolsSchema.filter(t => allowedTools.includes(t.function.name))
-        : agentToolsSchema;
-    
+    // W-05 Server-owned tool policy via CapabilityService
+    const allowedTools = await capabilityService.getAllowedCapabilities(sessionId);
+    const toolsToUse = agentToolsSchema.filter(t => allowedTools.has(t.function.name));
     while (loopCount < MAX_LOOPS && !isAborted) {
         loopCount++;
         
@@ -112,118 +117,11 @@ export async function executeAgenticTask(res, agentModel, systemPrompt, initialU
             // Append AI's raw choice back to the context window
             messages.push(msg);
 
-            // Heuristic Parsing for Hallucinated JSON Tool Calls
-            // Many OSS models output raw JSON text instead of native tool calls.
+            // Enforce strictly properly formatted JSON tool_calls.
+            // Phase 4 removes extreme markdown block hijacking to harden prompt bounds.
             if (msg.content && (!msg.tool_calls || msg.tool_calls.length === 0)) {
-                const startIndex = msg.content.indexOf('{"name"');
-                if (startIndex !== -1) {
-                    let possibleJson = msg.content.slice(startIndex);
-                    let parsedTool = null;
-                    let validJsonString = "";
-                    // Aggressive JSON Repair
-                    // LLMs often forget closing braces, add too many markdown blocks, or truncate strings.
-                    let cleanStr = possibleJson.replace(/```[a-z]*$/i, '').trim();
-                    let repairs = [
-                        cleanStr,
-                        cleanStr.substring(0, cleanStr.lastIndexOf('}') + 1), // Trim trailing garbage manually
-                        cleanStr + "}",
-                        cleanStr + "}}",
-                        cleanStr + '"}',
-                        cleanStr + '"}}',
-                        cleanStr + '}}}',
-                        cleanStr + '"}}}',
-                    ];
-
-                    for (let attempt of repairs) {
-                        try {
-                            // Secondary fallback: if syntax errors occur because of stray newlines inside a JSON string.
-                            // The LLM sometimes puts literal newlines inside "content": "..." instead of \n
-                            parsedTool = JSON.parse(attempt);
-                            validJsonString = cleanStr; // The original string we want to slice out of the chat
-                            break;
-                        } catch (e) {
-                            try {
-                                // Sometimes the LLM uses raw newlines. Let's try fixing common JSON structural errors.
-                                parsedTool = JSON.parse(attempt.replace(/(?<!\\)\n/g, '\\n').replace(/\\n/g, '\\n')); 
-                                validJsonString = cleanStr;
-                                break;
-                            } catch (e2) {}
-                        }
-                    }
-
-                    // Ultimate Fallback: If JSON is completely botched or truncated, manually extract strings
-                    if (!parsedTool && cleanStr.includes('"agentWriteFile"')) {
-                        const filenameMatch = cleanStr.match(/"filename"\s*:\s*"([^"]+)"/);
-                        const contentIndex = cleanStr.indexOf('"content"');
-                        if (filenameMatch && contentIndex !== -1) {
-                            let contentStr = cleanStr.substring(contentIndex);
-                            let firstQuote = contentStr.indexOf('"', contentStr.indexOf(':') + 1);
-                            let contentValue = contentStr.substring(firstQuote + 1);
-                            
-                            // Strip trailing quotes, braces, newlines LLM left behind
-                            contentValue = contentValue.replace(/("\s*\}*]*\s*\}*\s*```|["]\s*\}*]*\s*\}*\s*$)/gi, '');
-                            
-                            // Unescape JSON string to raw source code
-                            contentValue = contentValue.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-                            
-                            parsedTool = {
-                                name: "agentWriteFile",
-                                arguments: {
-                                    filename: filenameMatch[1],
-                                    content: contentValue
-                                }
-                            };
-                            validJsonString = cleanStr;
-                        }
-                    }
-
-                    if (parsedTool && parsedTool.name && parsedTool.arguments) {
-                        console.log(`🤖 AGENT_FALLBACK: Salvaged hallucinated tool call [${parsedTool.name}]`);
-                        msg.tool_calls = [{
-                            id: "call_salvaged_" + Math.random().toString(36).substring(7),
-                            type: "function",
-                            function: {
-                                name: parsedTool.name,
-                                arguments: parsedTool.arguments
-                            }
-                        }];
-                        // Clean up the conversational output so it doesn't print raw JSON to user
-                        msg.content = msg.content.replace(validJsonString, "\n*[Executing File Write Tool]*\n");
-                        // Strip trailing markdown code block ticks if left behind
-                        msg.content = msg.content.replace(/```(bash|json)?\s*\n\*\[Executing/g, "*[Executing");
-                        msg.content = msg.content.replace(/\*\[Executing File Write Tool\]\*\s*```/g, "*[Executing File Write Tool]*\n");
-                    }
-                }
+                // If model outputs content without tool_calls, we assume it's just talking.
             }
-
-            // Extreme Fallback: Markdown Block Hijacking
-            // If the LLM completely ignored the JSON schema and just dumped a raw ```python ...``` code block
-            if (msg.content && (!msg.tool_calls || msg.tool_calls.length === 0)) {
-                // Ignore bash/sh as they are usually pip installs, target actual languages
-                const codeBlockMatch = msg.content.match(/```(python|javascript|js|json|html|css)(\s*\n[\s\S]*?)```/);
-                if (codeBlockMatch) {
-                    const extMap = { "python": ".py", "javascript": ".js", "js": ".js", "json": ".json", "html": ".html", "css": ".css" };
-                    const lang = codeBlockMatch[1];
-                    const rawCode = codeBlockMatch[2].trim();
-                    const assumedFilename = "agent_generated_" + Math.random().toString(36).substring(2, 6) + extMap[lang];
-
-                    console.log(`🤖 AGENT_FALLBACK: Salvaged pure markdown block into file tool`);
-                    msg.tool_calls = [{
-                        id: "call_md_" + Math.random().toString(36).substring(7),
-                        type: "function",
-                        function: {
-                            name: "agentWriteFile",
-                            arguments: {
-                                filename: assumedFilename,
-                                content: rawCode
-                            }
-                        }
-                    }];
-                    // Swap the block for a status tag in the main chat
-                    msg.content = msg.content.replace(codeBlockMatch[0], `\n*[Auto-Saving Code to: ${assumedFilename}]*\n`);
-                }
-            }
-
             // 1. Tool Call Evaluation
             if (msg.tool_calls && msg.tool_calls.length > 0) {
                 for (const call of msg.tool_calls) {
@@ -248,10 +146,16 @@ export async function executeAgenticTask(res, agentModel, systemPrompt, initialU
                     
                     const executor = ToolRegistry[funcName];
                     let result;
+                    let isSuccess = 0;
+                    const startTime = Date.now();
 
-                    if (executor) {
+                    // Guard check
+                    if (!allowedTools.has(funcName)) {
+                        result = { success: false, error: `Tool ${funcName} is not authorized for this session.` };
+                    } else if (executor) {
                         try {
                             result = await executor({ ...funcArgs, sessionId });
+                            isSuccess = result.success ? 1 : 0;
                         } catch (err) {
                             result = { success: false, error: err.message };
                         }
@@ -259,6 +163,28 @@ export async function executeAgenticTask(res, agentModel, systemPrompt, initialU
                         result = { success: false, error: `Tool ${funcName} not found mapped in system.` };
                     }
                     
+                    const duration = Date.now() - startTime;
+
+                    // Audit Logging
+                    try {
+                        await dbService.runQuery(
+                            `INSERT INTO AgentAudit (session_id, agent_id, tool_name, arguments_json, capability_approved, success, result_preview, duration_ms) 
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                            [
+                                sessionId, 
+                                agentModel, 
+                                funcName, 
+                                JSON.stringify(funcArgs), 
+                                allowedTools.has(funcName) ? 1 : 0, 
+                                isSuccess, 
+                                JSON.stringify(result).substring(0, 500), 
+                                duration
+                            ]
+                        );
+                    } catch (auditErr) {
+                        console.error("Failed to write to AgentAudit:", auditErr);
+                    }
+
                     // Alert Frontend Terminal Result
                     res.write(`data: ${JSON.stringify({ 
                         type: "agent-tool-result", 

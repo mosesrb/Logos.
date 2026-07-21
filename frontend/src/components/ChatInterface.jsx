@@ -51,7 +51,7 @@ const ChatInterface = ({
           <div className="welcome-feature-info">
             <strong>ICARUS_PROTOCOL:</strong> Agentic tool-belt for autonomous file & environment operations.
           </div>
-          <div className="welcome-feature-info" style={{ opacity: 0.6 }}>
+          <div className="welcome-feature-info" >
             [S/N: 442-99-B] REF_CHRONOS_V3
           </div>
         </div>

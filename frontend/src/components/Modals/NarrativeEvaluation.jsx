@@ -1,17 +1,21 @@
 import React from 'react';
+import FocusTrap from 'focus-trap-react';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 const NarrativeEvaluation = ({
   evaluation,
   setEvaluation
 }) => {
+  useEscapeKey(Boolean(evaluation), () => setEvaluation(null));
   if (!evaluation) return null;
 
   return (
-    <div className="modal-overlay" onClick={() => setEvaluation(null)}>
-      <div className="modal-content glass-panel" style={{ maxWidth: '600px', border: '1px solid var(--cyan)' }} onClick={e => e.stopPropagation()}>
+    <FocusTrap focusTrapOptions={{ initialFocus: false, escapeDeactivates: false, clickOutsideDeactivates: false, fallbackFocus: '.modal-content' }}>
+      <div className="modal-overlay" onClick={() => setEvaluation(null)}>
+      <div className="modal-content glass-panel" role="dialog" aria-modal="true" aria-label="Narrative evaluation" style={{ maxWidth: '600px', border: '1px solid var(--cyan)' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2 style={{ color: 'var(--cyan)' }}>📊 NARRATIVE_INTEGRITY_REPORT</h2>
-          <button className="close-btn" onClick={() => setEvaluation(null)}>×</button>
+          <button type="button" aria-label="Close" className="close-btn" onClick={() => setEvaluation(null)}>×</button>
         </div>
         <div className="evaluation-grid">
           <div className="eval-stat">
@@ -44,6 +48,7 @@ const NarrativeEvaluation = ({
         </div>
       </div>
     </div>
+    </FocusTrap>
   );
 };
 
