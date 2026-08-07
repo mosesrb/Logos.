@@ -184,12 +184,13 @@ export function useChatTransport({
     const signal = abortControllerRef.current.signal;
 
     const cleanImages = visionBuffer.map(img => img.includes("base64,") ? img.split("base64,")[1] : img);
+    let lastDataTime = Date.now();
     let hangCheckInterval = null;
 
     try {
         hangCheckInterval = setInterval(() => {
-            if (Date.now() - lastDataTime > 60000) { // 60s timeout
-                console.warn("⏱️ Agent Stream Timeout: No data received for 60s. Aborting.");
+            if (Date.now() - lastDataTime > 300000) { // 300s timeout
+                console.warn("⏱️ Agent Stream Timeout: No data received for 300s. Aborting.");
                 handleStopGeneration();
             }
         }, 5000);
@@ -270,8 +271,8 @@ export function useChatTransport({
 
     let lastDataTime = Date.now();
     const hangCheckInterval = setInterval(() => {
-        if (Date.now() - lastDataTime > 45000) { // 45s for normal chat
-            console.warn("⏱️ Normal Stream Timeout: No data received for 45s. Aborting.");
+        if (Date.now() - lastDataTime > 300000) { // 300s for normal chat
+            console.warn("⏱️ Normal Stream Timeout: No data received for 300s. Aborting.");
             handleStopGeneration();
             clearInterval(hangCheckInterval);
         }
@@ -678,9 +679,6 @@ export function useChatTransport({
     );
   }
 
-  const togglePersonaSelection = (id) => {
-    setSelectedPersonaIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
 
   // Stale model selection functions removed (Persona-centric refactor)
 

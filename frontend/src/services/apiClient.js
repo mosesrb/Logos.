@@ -14,7 +14,7 @@ class ApiError extends Error {
  * Core fetch wrapper with centralized error handling and timeout.
  */
 export async function apiFetch(endpoint, options = {}) {
-  const { timeout = 30000, ...fetchOptions } = options;
+  const { timeout = 300000, ...fetchOptions } = options;
 
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);

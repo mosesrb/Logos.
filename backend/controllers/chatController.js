@@ -13,6 +13,7 @@ import { loadUserPersona } from "../ai/userPersonaStore.js";
 import { indexEpisodicMemory, queryGlobalMemory, indexImageMemory, queryImageMemory, scanPersonaReferences } from "../services/memoryService.js";
 import { getModelTier } from "../modelRouter.js";
 import { validateBody, ChatBodySchema } from "../middleware/validate.js";
+import { llmProvider } from "../services/llm/index.js";
 
 export function setupChatRoutes(app, context) {
 
@@ -31,11 +32,7 @@ export function setupChatRoutes(app, context) {
     _comfyFallback,
     saveRelationships,
     buildFullPrompt,
-    getModelOptions,
-    MAX_CONCURRENT_HEAVY,
-    getActiveHeavyModels,
-    incrementHeavyModels,
-    decrementHeavyModels
+    getModelOptions
   } = context;
 // ------------------ CHAT ENDPOINTS (single + parallel) ------------------
 // Single chat streaming
@@ -49,6 +46,18 @@ app.post("/api/chat/:sessionId", validateBody(ChatBodySchema), async (req, res) 
   const routedModel = routeModel(prompt, model, s0?.scenarioModelPreference || null, images?.length > 0);
   
   if (!prompt || typeof prompt !== "string") return res.status(400).json({ error: "missing prompt" });
+
+  // Phase 5.1: Prompt Injection Heuristic Validation
+  const injectionPatterns = [
+    /ignore (all )?(previous )?(instructions|directions)/i,
+    /system prompt/i,
+    /bypass/i,
+    /you are now/i,
+    /forget (everything|previous)/i
+  ];
+  if (injectionPatterns.some(pattern => pattern.test(prompt))) {
+    return res.status(403).json({ error: "Input rejected due to potential prompt injection or policy violation." });
+  }
 
   try {
     res.setHeader("Content-Type", "text/event-stream");
@@ -92,12 +101,6 @@ app.post("/api/chat/:sessionId", validateBody(ChatBodySchema), async (req, res) 
 
     const hybridOptions = buildHybridOptions(routedModel, options);
     const modelTier = getModelTier(routedModel);
-    if (modelTier === "heavy") {
-      if (getActiveHeavyModels() >= MAX_CONCURRENT_HEAVY) {
-        return res.status(429).json({ error: "A heavy model is already running." });
-      }
-      incrementHeavyModels();
-    }
 
     addLog(sessionId, `Neural Sync Loop [${routedModel}]`, "sys");
     const _t0 = Date.now();
@@ -127,123 +130,86 @@ app.post("/api/chat/:sessionId", validateBody(ChatBodySchema), async (req, res) 
         let toolInputBuf = "";
         let contentBuf = "";
 
-        const ollamaPayload = {
-          model: routedModel,
-          messages: currentMessages,
-          stream: true,
-          options: hybridOptions,
-        };
+        await llmProvider.runConversationStream(routedModel, currentMessages, hybridOptions, (delta) => {
+          if (isAborted) return;
+          rawBuffer += delta;
 
-        const response = await fetch((process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434") + "/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(ollamaPayload),
+          // Phase 1: Tag State Machine Updates
+          if (rawBuffer.includes("[THOUGHT]")) {
+            currentTag = "THOUGHT";
+            rawBuffer = rawBuffer.slice(rawBuffer.indexOf("[THOUGHT]") + 9);
+          } else if (rawBuffer.includes("[ACTION]")) {
+            currentTag = "ACTION";
+            rawBuffer = rawBuffer.slice(rawBuffer.indexOf("[ACTION]") + 8);
+          } else if (rawBuffer.includes("[TOOL_INPUT]")) {
+            currentTag = "TOOL_INPUT";
+            rawBuffer = rawBuffer.slice(rawBuffer.indexOf("[TOOL_INPUT]") + 12);
+          } else if (rawBuffer.includes("[FINAL_ANSWER]")) {
+            currentTag = "FINAL_ANSWER";
+            rawBuffer = rawBuffer.slice(rawBuffer.indexOf("[FINAL_ANSWER]") + 14);
+          }
+
+          // Fallback for non-agentic models
+          if (!currentTag && rawBuffer.length > 20 && !rawBuffer.includes("[")) {
+            currentTag = "FINAL_ANSWER";
+          }
+
+          if (!currentTag) return;
+
+          let flushable = "";
+          const lastBracket = rawBuffer.lastIndexOf("[");
+          
+          if (lastBracket !== -1 && (rawBuffer.length - lastBracket) <= 25 && !rawBuffer.slice(lastBracket).includes("\n")) {
+            flushable = rawBuffer.slice(0, lastBracket);
+            rawBuffer = rawBuffer.slice(lastBracket);
+          } else {
+            flushable = rawBuffer;
+            rawBuffer = "";
+          }
+
+          if (flushable.length > 0) {
+            // Auto-clean stray closing brackets at the very beginning of a fallback output
+            if (contentBuf.length === 0 && currentTag === "FINAL_ANSWER" && flushable.trim().startsWith("]")) {
+              flushable = flushable.replace(/^[\s\]]+/, "");
+            }
+
+            if (flushable.length > 0) {
+              if (currentTag === "THOUGHT") {
+                thoughtBuf += flushable;
+                accumulatedThought += flushable;
+                res.write(`data: ${JSON.stringify({ type: "thought", content: flushable })}\n\n`);
+              } else if (currentTag === "ACTION") {
+                actionBuf += flushable;
+              } else if (currentTag === "TOOL_INPUT") {
+                toolInputBuf += flushable;
+              } else if (currentTag === "FINAL_ANSWER") {
+                contentBuf += flushable;
+                finalAnswerOutput += flushable;
+                res.write(`data: ${JSON.stringify({ content: flushable })}\n\n`);
+              }
+            }
+          }
         });
 
-        if (!response.ok) throw new Error(`Ollama Error: ${response.statusText}`);
-
-        let jsonBuffer = "";
-        for await (const chunk of response.body) {
-          if (isAborted) break;
-          jsonBuffer += Buffer.from(chunk).toString("utf-8");
-          
-          let newlineIndex;
-          while ((newlineIndex = jsonBuffer.indexOf("\n")) !== -1) {
-            const line = jsonBuffer.slice(0, newlineIndex);
-            jsonBuffer = jsonBuffer.slice(newlineIndex + 1);
-            if (!line.trim()) continue;
-            try {
-              const json = JSON.parse(line);
-              if (json.done) {
-                if (rawBuffer.length > 0) {
-                  if (!currentTag) currentTag = "FINAL_ANSWER";
-                  let finalFlush = rawBuffer;
-                  if (currentTag === "FINAL_ANSWER" && contentBuf.length === 0) finalFlush = finalFlush.replace(/^[\s\]]+/, "");
-                  if (finalFlush.length > 0) {
-                    if (currentTag === "THOUGHT") {
-                      thoughtBuf += finalFlush;
-                      accumulatedThought += finalFlush;
-                      res.write(`data: ${JSON.stringify({ type: "thought", content: finalFlush })}\n\n`);
-                    } else if (currentTag === "FINAL_ANSWER") {
-                      contentBuf += finalFlush;
-                      finalAnswerOutput += finalFlush;
-                      res.write(`data: ${JSON.stringify({ content: finalFlush })}\n\n`);
-                    } else if (currentTag === "ACTION") {
-                      actionBuf += finalFlush;
-                    } else if (currentTag === "TOOL_INPUT") {
-                      toolInputBuf += finalFlush;
-                    }
-                  }
-                }
-                break;
-              }
-              const delta = json.message?.content || "";
-              rawBuffer += delta;
-
-              // Phase 1: Tag State Machine Updates
-              if (rawBuffer.includes("[THOUGHT]")) {
-                currentTag = "THOUGHT";
-                rawBuffer = rawBuffer.slice(rawBuffer.indexOf("[THOUGHT]") + 9);
-              } else if (rawBuffer.includes("[ACTION]")) {
-                currentTag = "ACTION";
-                rawBuffer = rawBuffer.slice(rawBuffer.indexOf("[ACTION]") + 8);
-              } else if (rawBuffer.includes("[TOOL_INPUT]")) {
-                currentTag = "TOOL_INPUT";
-                rawBuffer = rawBuffer.slice(rawBuffer.indexOf("[TOOL_INPUT]") + 12);
-              } else if (rawBuffer.includes("[FINAL_ANSWER]")) {
-                currentTag = "FINAL_ANSWER";
-                rawBuffer = rawBuffer.slice(rawBuffer.indexOf("[FINAL_ANSWER]") + 14);
-              }
-
-              // Fallback for non-agentic models: If significant text without tags appears, default to FINAL_ANSWER
-              if (!currentTag && rawBuffer.length > 20 && !rawBuffer.includes("[")) {
-                currentTag = "FINAL_ANSWER";
-              }
-
-              // Phase 2: Wait until a tag is established
-              if (!currentTag) {
-                // Keep accumulating rawBuffer until Tag or Fallback applies so no text is lost
-                continue;
-              }
-
-              // Phase 3: Secure Streaming Buffer (Hold partial brackets)
-              let flushable = "";
-              const lastBracket = rawBuffer.lastIndexOf("[");
-              
-              if (lastBracket !== -1 && (rawBuffer.length - lastBracket) <= 25 && !rawBuffer.slice(lastBracket).includes("\n")) {
-                // A tag might be forming. Strictly flush only the safe text BEFORE the '['
-                flushable = rawBuffer.slice(0, lastBracket);
-                rawBuffer = rawBuffer.slice(lastBracket);
-              } else {
-                // No open tags or max search distance exceeded, safe to flush all
-                flushable = rawBuffer;
-                rawBuffer = "";
-              }
-
-              // Phase 4: Stream to destination based on current tag
-              if (flushable.length > 0) {
-                // Auto-clean stray closing brackets at the very beginning of a fallback output
-                if (contentBuf.length === 0 && currentTag === "FINAL_ANSWER" && flushable.trim().startsWith("]")) {
-                  flushable = flushable.replace(/^[\s\]]+/, "");
-                }
-
-                if (flushable.length > 0) {
-                  if (currentTag === "THOUGHT") {
-                    thoughtBuf += flushable;
-                    accumulatedThought += flushable;
-                    res.write(`data: ${JSON.stringify({ type: "thought", content: flushable })}\n\n`);
-                  } else if (currentTag === "ACTION") {
-                    actionBuf += flushable;
-                  } else if (currentTag === "TOOL_INPUT") {
-                    toolInputBuf += flushable;
-                  } else if (currentTag === "FINAL_ANSWER") {
-                    contentBuf += flushable;
-                    finalAnswerOutput += flushable;
-                    res.write(`data: ${JSON.stringify({ content: flushable })}\n\n`);
-                  }
-                }
-              }
-            } catch (e) {}
+        // Final flush when stream ends
+        if (rawBuffer.length > 0) {
+          if (!currentTag) currentTag = "FINAL_ANSWER";
+          let finalFlush = rawBuffer;
+          if (currentTag === "FINAL_ANSWER" && contentBuf.length === 0) finalFlush = finalFlush.replace(/^[\s\]]+/, "");
+          if (finalFlush.length > 0) {
+            if (currentTag === "THOUGHT") {
+              thoughtBuf += finalFlush;
+              accumulatedThought += finalFlush;
+              res.write(`data: ${JSON.stringify({ type: "thought", content: finalFlush })}\n\n`);
+            } else if (currentTag === "FINAL_ANSWER") {
+              contentBuf += finalFlush;
+              finalAnswerOutput += finalFlush;
+              res.write(`data: ${JSON.stringify({ content: finalFlush })}\n\n`);
+            } else if (currentTag === "ACTION") {
+              actionBuf += finalFlush;
+            } else if (currentTag === "TOOL_INPUT") {
+              toolInputBuf += finalFlush;
+            }
           }
         }
 
@@ -323,15 +289,15 @@ app.post("/api/chat/:sessionId", validateBody(ChatBodySchema), async (req, res) 
       res.write("data: [DONE]\n\n");
       res.end();
     } catch (err) {
-      require('fs').appendFileSync('error_log.txt', new Date().toISOString() + ' Stream Error: ' + err.stack + '\n');
+      require('fs').promises.appendFile('error_log.txt', new Date().toISOString() + ' Stream Error: ' + err.stack + '\n').catch(console.error);
       console.error("Stream Error:", err);
       if (!res.headersSent) res.status(500).json({ error: err.message });
       else res.end();
     } finally {
-      if (modelTier === "heavy") decrementHeavyModels();
+      // Cleanup completed.
     }
   } catch (err) {
-    require('fs').appendFileSync('error_log.txt', new Date().toISOString() + ' Outer Route Error: ' + err.stack + '\n');
+    require('fs').promises.appendFile('error_log.txt', new Date().toISOString() + ' Outer Route Error: ' + err.stack + '\n').catch(console.error);
     res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
@@ -398,48 +364,22 @@ app.post("/api/chat/parallel/:sessionId", async (req, res) => {
       if (systemPrompt) messages.push({ role: "system", content: systemPrompt });
       messages.push({ role: "user", content: fullPromptBase, images: cleanedImages });
 
-      const ollamaPayload = {
-        model: model,
-        messages: messages,
-        stream: false,
-        options: options || {}
-      };
-
-      const ollamaRes = await fetch((process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434") + "/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(ollamaPayload),
-      });
-
-      if (!ollamaRes.ok) {
-        const errorText = await ollamaRes.text();
-        res.write(`data: ${JSON.stringify({ model, error: `Ollama Error (${ollamaRes.status}): ${errorText}` })}\n\n`);
-        continue;
-      }
-
       try {
         if (sources && sources.length > 0) {
           res.write(`data: ${JSON.stringify({ sources })}\n\n`);
         }
         
-        const data = await ollamaRes.json();
-        const contentStr = data.message ? data.message.content : (data.response || "{}");
-        let finalContent = contentStr;
-        try {
-          const parsed = JSON.parse(contentStr);
-          finalContent = parsed.final_answer || contentStr;
-        } catch(e) {}
-
-        const chunks = finalContent.match(/.{1,10}/g) || [finalContent];
-        for (const chunk of chunks) {
-          res.write(`data: ${JSON.stringify({ model, personaName: persona?.name, personaId: persona?.id, content: chunk })}\n\n`);
-          await new Promise(r => setTimeout(r, 10)); // tiny delay
-        }
+        let finalContent = "";
+        await llmProvider.runModel(model, fullPromptBase, (delta) => {
+          finalContent += delta;
+          res.write(`data: ${JSON.stringify({ model, personaName: persona?.name, personaId: persona?.id, content: delta })}\n\n`);
+        }, cleanedImages, systemPrompt, options);
 
         s.messages.push({ role: `parallel-${model}`, content: finalContent.trim(), time: new Date().toISOString(), model, personaId: persona?.id });
         await saveSessionToDisk(s);
       } catch (e) {
         console.error("Parallel model run error:", e.message);
+        res.write(`data: ${JSON.stringify({ model, error: `Error: ${e.message}` })}\n\n`);
       }
     }
 
@@ -912,92 +852,68 @@ app.post("/api/chat/scenario/:sessionId", async (req, res) => {
       ];
 
       try {
-        const ollamaRes = await fetch((process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434") + "/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model, messages, stream: true, options }),
-        });
-
-        if (!ollamaRes.ok) throw new Error(`Ollama Error: ${ollamaRes.status}`);
-
         let roleFullBuf = "";
         let characterBuf = "";
         let thoughtBuf = "";
         let isThinking = false;
-        let lineBuffer = "";
 
-        for await (const chunk of ollamaRes.body) {
-          lineBuffer += Buffer.from(chunk).toString("utf-8");
-          const lines = lineBuffer.split("\n");
-          lineBuffer = lines.pop();
-
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const json = JSON.parse(line);
-              const content = json.response || (json.message && json.message.content);
-              if (content) {
-                roleFullBuf += content;
-                
-                // Thought Parsing Logic
-                if (roleFullBuf.includes("<thought>") && !roleFullBuf.includes("</thought>")) {
-                  isThinking = true;
-                  // Extract what's inside <thought> so far
-                  const startIdx = roleFullBuf.indexOf("<thought>") + 9;
-                  const currentThoughtChunk = roleFullBuf.slice(startIdx);
-                  const piece = currentThoughtChunk.slice(thoughtBuf.length);
-                  if (piece) {
-                    thoughtBuf = currentThoughtChunk;
-                    res.write(`data: ${JSON.stringify({ role, type: "thought", content: piece })}\n\n`);
-                  }
-                } else if (roleFullBuf.includes("</thought>")) {
-                   if (isThinking) {
-                     // Just finished thinking
-                     const endIdx = roleFullBuf.indexOf("</thought>");
-                     const startIdx = roleFullBuf.indexOf("<thought>") + 9;
-                     thoughtBuf = roleFullBuf.slice(startIdx, endIdx);
-                     isThinking = false;
-                     addLog(sessionId, `SCENARIO: Role "${role}" finished cognitive planning [${thoughtBuf.length} chars]`, "sys");
-                     res.write(`data: ${JSON.stringify({ role, type: "thought-complete" })}\n\n`);
-                   }
-                   // Everything after </thought> is character content
-                   const characterStart = roleFullBuf.indexOf("</thought>") + 10;
-                   const newContent = roleFullBuf.slice(characterStart);
-                   // Only stream the NEW character content
-                   const currentLen = characterBuf.length;
-                   const piece = newContent.slice(currentLen);
-                   if (piece) {
-                     characterBuf += piece;
-                     res.write(`data: ${JSON.stringify({ role, content: piece })}\n\n`);
-                   }
-                } else {
-                  // Standard content if no <thought> tag detected at all (fallback)
-                  if (!roleFullBuf.includes("<thought>")) {
-                    characterBuf += content;
-                    res.write(`data: ${JSON.stringify({ role, content })}\n\n`);
-                  }
-                }
-              }
-              if (json.done) {
-                s.messages.push({ 
-                  role: `scenario-${role}`, 
-                  content: characterBuf.trim(), 
-                  thought: thoughtBuf.trim(), 
-                  time: new Date().toISOString(), 
-                  model,
-                  personaId: persona?.id,
-                  scenarioId
-                });
-
-                await saveSessionToDisk(s);
-
-                // Index Character Response (not thoughts) into CHRONOS
-                indexEpisodicMemory(sessionId, `scenario-${role}`, characterBuf.trim(), null, persona?.id || role);
-                break;
-              }
-            } catch (e) {}
+        await runModel(model, prompt, (content) => {
+          roleFullBuf += content;
+          
+          // Thought Parsing Logic
+          if (roleFullBuf.includes("<thought>") && !roleFullBuf.includes("</thought>")) {
+            isThinking = true;
+            // Extract what's inside <thought> so far
+            const startIdx = roleFullBuf.indexOf("<thought>") + 9;
+            const currentThoughtChunk = roleFullBuf.slice(startIdx);
+            const piece = currentThoughtChunk.slice(thoughtBuf.length);
+            if (piece) {
+              thoughtBuf = currentThoughtChunk;
+              res.write(`data: ${JSON.stringify({ role, type: "thought", content: piece })}\n\n`);
+            }
+          } else if (roleFullBuf.includes("</thought>")) {
+             if (isThinking) {
+               // Just finished thinking
+               const endIdx = roleFullBuf.indexOf("</thought>");
+               const startIdx = roleFullBuf.indexOf("<thought>") + 9;
+               thoughtBuf = roleFullBuf.slice(startIdx, endIdx);
+               isThinking = false;
+               addLog(sessionId, `SCENARIO: Role "${role}" finished cognitive planning [${thoughtBuf.length} chars]`, "sys");
+               res.write(`data: ${JSON.stringify({ role, type: "thought-complete" })}\n\n`);
+             }
+             // Everything after </thought> is character content
+             const characterStart = roleFullBuf.indexOf("</thought>") + 10;
+             const newContent = roleFullBuf.slice(characterStart);
+             // Only stream the NEW character content
+             const currentLen = characterBuf.length;
+             const piece = newContent.slice(currentLen);
+             if (piece) {
+               characterBuf += piece;
+               res.write(`data: ${JSON.stringify({ role, content: piece })}\n\n`);
+             }
+          } else {
+            // Standard content if no <thought> tag detected at all (fallback)
+            if (!roleFullBuf.includes("<thought>")) {
+              characterBuf += content;
+              res.write(`data: ${JSON.stringify({ role, content })}\n\n`);
+            }
           }
-        }
+        }, images, systemPrompt, options);
+
+        s.messages.push({ 
+          role: `scenario-${role}`, 
+          content: characterBuf.trim(), 
+          thought: thoughtBuf.trim(), 
+          time: new Date().toISOString(), 
+          model,
+          personaId: persona?.id,
+          scenarioId
+        });
+
+        await saveSessionToDisk(s);
+
+        // Index Character Response (not thoughts) into CHRONOS
+        indexEpisodicMemory(sessionId, `scenario-${role}`, characterBuf.trim(), null, persona?.id || role);
       } catch (e) {
         console.error(`Scenario role ${role} failed:`, e.message);
         res.write(`data: ${JSON.stringify({ role, error: e.message })}\n\n`);
@@ -1016,166 +932,4 @@ app.post("/api/chat/scenario/:sessionId", async (req, res) => {
   }
 });
 
-}
-
-// T4: runModel with hybrid GPU options and T6 metrics
-export async function runModel(model, prompt, onChunkCallback = null, images = [], systemPrompt = null, options = null) {
-  // Safely route model (forces moondream if images exist to prevent RETINA_ERROR)
-  const routedModel = (options && options.skipRouting) ? model : routeModel(prompt, model, null, images?.length > 0);
-
-  const messages = [];
-  if (systemPrompt) messages.push({ role: "system", content: systemPrompt });
-  messages.push({ role: "user", content: prompt, images: cleanImages(images) });
-
-  // T3/T4: Inject hybrid GPU layer config for heavy-tier models
-  const hybridOpts = buildHybridOptions(routedModel, options || {});
-  const payload = { model: routedModel, messages, stream: true };
-  if (Object.keys(hybridOpts).length > 0) payload.options = hybridOpts;
-
-  const _rmT0 = Date.now();
-  const ollamaRes = await fetch((process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434") + "/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  
-  if (!ollamaRes.ok) throw new Error(`Ollama Error (${ollamaRes.status})`);
-  
-  let fullOutput = "";
-  let runModelLineBuffer = "";
-  try {
-    for await (const chunk of ollamaRes.body) {
-      runModelLineBuffer += Buffer.from(chunk).toString("utf-8");
-      const lines = runModelLineBuffer.split("\n");
-      runModelLineBuffer = lines.pop();
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const json = JSON.parse(line);
-          const content = json.response || (json.message && json.message.content);
-          if (content !== undefined && content !== null) {
-            fullOutput += content;
-            if (onChunkCallback) onChunkCallback(content);
-          }
-          if (json.done) {
-            // T6: Track metrics
-            if (!modelMetrics[routedModel]) modelMetrics[routedModel] = { calls: 0, totalMs: 0 };
-            modelMetrics[routedModel].calls++;
-            modelMetrics[routedModel].totalMs += (Date.now() - _rmT0);
-            return fullOutput.trim();
-          }
-        } catch (e) {
-          console.error("runModel parse error:", e.message, line);
-        }
-      }
-    }
-    // Trailing buffer
-    if (runModelLineBuffer.trim()) {
-      try {
-        const json = JSON.parse(runModelLineBuffer);
-        const content = json.response || (json.message && json.message.content);
-        if (content) {
-          fullOutput += content;
-          if (onChunkCallback) onChunkCallback(content);
-        }
-      } catch(e) {}
-    }
-    return fullOutput.trim();
-  } catch (e) {
-    console.error("runModel iteration error:", e.message);
-    return fullOutput.trim();
-  }
-}
-
-// Helper for extracting clean answers when JSON options are forced
-export function parseCleanAnswer(rawOutput) {
-  if (!rawOutput) return "";
-  
-  // 1. Initial cleanup: Remove standard wrappers and markdown blocks
-  let cleaned = rawOutput
-    .replace(/^Response:\s*/i, '')
-    .replace(/^JSON_SCHEMA\s*/i, '')
-    .replace(/^```json\s*/i, '')
-    .replace(/```\s*$/i, '')
-    .trim();
-
-  // 2. High-Fidelity Tag Extraction: Support [FINAL ANSWER] and [FINAL_ANSWER]
-  // We look for any variation of the final answer tag to isolate the payload.
-  const finalAnswerMarkers = ["[FINAL ANSWER]", "[FINAL_ANSWER]", "FINAL ANSWER:", "FINAL_ANSWER:"];
-  for (const marker of finalAnswerMarkers) {
-    if (cleaned.includes(marker)) {
-      const parts = cleaned.split(marker);
-      // If there is content after the marker, prioritize it.
-      // Otherwise, if the marker is at the end, the content is before it.
-      let candidate = parts[parts.length - 1].trim();
-      if (!candidate && parts.length > 1) {
-        candidate = parts[parts.length - 2].trim();
-      }
-      cleaned = candidate;
-      break; 
-    }
-  }
-
-  // 3. Command Blackhole Filter: Strip raw tool calls like 'generate_image' { ... } or tool_call(...)
-  // These often leak when models hallucinate tool-use in narrative modes.
-  const toolCallRegex = /['"]?[\w_]+['"]?\s*\{[\s\S]*?\}\s*/g;
-  const funcCallRegex = /[\w_]+\s*\([\s\S]*?\)\s*/g;
-  cleaned = cleaned.replace(toolCallRegex, "").replace(funcCallRegex, "").trim();
-
-  // 4. Brute-Force Tag Strip: Fuzzy matching for [THOUGHT], [ACTION], [TOOL INPUT], etc.
-  // We use [\s_]? to handle both spaces and underscores.
-  const agenticTags = /\[(?:THOUGHT|ACTION|TOOL[\s_]INPUT|RESULT|RESPONSE|INTERIM[\s_]MESSAGE|SYNTHESIZING|FINAL[\s_]ANSWER|REASONING|PLAN|THOUGHT[\s_]PROCESS)\]/gi;
-  cleaned = cleaned.replace(agenticTags, "").trim();
-
-  // 5. Standard JSON Parsing Attempt (If the model is strictly following schema)
-  try {
-    const parsed = JSON.parse(cleaned);
-    let ans = parsed.final_answer || parsed.result || parsed.message || parsed.content || parsed.text || parsed.response || parsed.interim_message;
-    if (ans) return typeof ans === 'string' ? ans.trim() : JSON.stringify(ans).trim();
-    
-    // If it parsed but NO target key is found (null fields), and it leaked 'thought', hide the noise.
-    if (parsed.thought && !ans) {
-       if (parsed.action && parsed.action !== "null" && parsed.action !== "none") {
-          return `*(Executing ${parsed.action}...)*`;
-       }
-       return "*(Synthesizing thoughts...)*";
-    }
-  } catch(e) {}
-
-  // 6. Partial JSON / Block Rescue Logic (Outer Braces)
-  const firstBrace = cleaned.indexOf('{');
-  const lastBrace = cleaned.lastIndexOf('}');
-  
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    const jsonBlock = cleaned.substring(firstBrace, lastBrace + 1);
-    try {
-      const parsed = JSON.parse(jsonBlock);
-      let ans = parsed.final_answer || parsed.result || parsed.message || parsed.content || parsed.text || parsed.response || parsed.interim_message;
-      
-      if (ans) {
-         let remainder = cleaned.substring(lastBrace + 1).trim();
-         ans = typeof ans === 'string' ? ans.trim() : JSON.stringify(ans).trim();
-         if (remainder && remainder.length > 5 && !remainder.startsWith(ans.substring(0, 5))) {
-            return ans + "\n\n" + remainder;
-         }
-         return ans;
-      }
-      if (parsed.thought) return cleaned.substring(lastBrace + 1).trim();
-    } catch(err) {}
-  }
-  
-  // 7. Binary Field Rescue: Extract 'final_answer' from fragments
-  if (cleaned.includes('"final_answer"')) {
-      const fieldMatch = cleaned.match(/"final_answer"\s*:\s*"((?:\\.|[^"\\])*)"/s);
-      if (fieldMatch && fieldMatch[1]) {
-          return fieldMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
-      }
-  }
-
-  // 8. Final Cleanup: Leftover fragments and structural markers
-  return cleaned
-    .replace(/^(Thought|Action|Tool[\s_]Input):\s*/gim, "")
-    .replace(/[\[\]]/g, "") // Final pass to strip any stray brackets
-    .trim();
 }

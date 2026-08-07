@@ -26,6 +26,8 @@ export let globalMemory = [];
 
 const mempalaceBuffer = {};
 
+import { llmProvider } from "./llm/index.js";
+
 export async function indexEpisodicMemory(sessionId, role, text, mood = null, personaId = "assistant") {
   if (!text || text.trim().length < 10) return;
   console.log(`🧠 MEMORY_INDEX: [${personaId}] role=${role} len=${text.length}`);
@@ -41,11 +43,26 @@ export async function indexEpisodicMemory(sessionId, role, text, mood = null, pe
     const convoText = mempalaceBuffer[slug].join("\n");
     mempalaceBuffer[slug] = []; // Clear buffer immediately
     
-    // Fire and forget
-    mineConversation(convoText, slug, "Nexus").then(res => {
-      if (res.ok) console.log(`🏛️ MEMPALACE: Indexed turns into wing [${slug}]`);
-      else console.error(`🏛️ MEMPALACE Error for [${slug}]:`, res.error);
-    });
+    // Fire and forget, but summarize if the text is huge to prevent context overload
+    (async () => {
+      try {
+        let textToMine = convoText;
+        if (convoText.length > 2000) {
+          console.log(`🧠 MEMORY_INDEX: Summarizing large context block (${convoText.length} chars) before indexing...`);
+          const systemPrompt = "You are an expert archivist. Summarize the following conversation chunk, keeping all critical facts, entities, decisions, and relationships intact. Be concise.";
+          const summary = await llmProvider.runModel("default", "Summarize this:\n\n" + convoText, null, [], systemPrompt, { skipRouting: true });
+          if (summary && summary.trim().length > 0) {
+            textToMine = summary;
+          }
+        }
+        
+        const res = await mineConversation(textToMine, slug, "Nexus");
+        if (res.ok) console.log(`🏛️ MEMPALACE: Indexed turns into wing [${slug}]`);
+        else console.error(`🏛️ MEMPALACE Error for [${slug}]:`, res.error);
+      } catch (err) {
+        console.error(`🏛️ MEMPALACE Exception for [${slug}]:`, err);
+      }
+    })();
   }
 }
 
@@ -217,11 +234,9 @@ export async function indexImageMemory(deps, sessionId, tags, prompt, filePath, 
     const wordCount = (blipCaption || "").split(/\s+/).length;
     if (wordCount <= 15 || process.env.FORCE_REFINEMENT) {
       try {
-        const refinementPrompt = `IMAGE CAPTION: "${blipCaption}"\nUSER_PROMPT: "${prompt || 'N/A'}"\nTask: Convert the caption into a compact JSON object.\nRules:\n- Output ONLY valid JSON.\n- No preamble, no explanation, no markdown blocks.\n- JSON structure: {"tags": "comma, separated, tags", "description": "concise description"}`;
-        const response = await runModel(UTILITY_MODEL, refinementPrompt);
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
-        const cleanedJsonStr = jsonMatch ? jsonMatch[0] : response;
-        const refined = JSON.parse(cleanedJsonStr);
+        const refinementPrompt = `IMAGE CAPTION: "${blipCaption}"\nUSER_PROMPT: "${prompt || 'N/A'}"\nTask: Convert the caption into a compact JSON object.`;
+        // Use native JSON structured outputs instead of regex scraping
+        const refined = await deps.runModelStructured(UTILITY_MODEL, refinementPrompt, null, "You are a JSON converter. No preamble.");
         if (refined.tags) refinedTags = Array.isArray(refined.tags) ? refined.tags.join(", ") : String(refined.tags);
         if (refined.description) refinedDescription = refined.description;
       } catch (e) { }

@@ -1,0 +1,20 @@
+2026-08-06T17:21:19.585Z Generate Title Error: Error: Ollama Error (404)
+    at runModel (file:///E:/MachineApps/logos-main/backend/controllers/chatController.js:1048:28)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async file:///E:/MachineApps/logos-main/backend/controllers/appController.js:137:5
+2026-08-06T17:21:33.188Z Generate Title Error: Error: Ollama Error (404)
+    at runModel (file:///E:/MachineApps/logos-main/backend/controllers/chatController.js:1048:28)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async file:///E:/MachineApps/logos-main/backend/controllers/appController.js:137:5
+2026-08-06T17:21:42.263Z Generate Title Error: Error: Ollama Error (404)
+    at runModel (file:///E:/MachineApps/logos-main/backend/controllers/chatController.js:1048:28)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async file:///E:/MachineApps/logos-main/backend/controllers/appController.js:137:5
+2026-08-06T17:23:15.618Z Generate Title Error: Error: Ollama Error (404)
+    at runModel (file:///E:/MachineApps/logos-main/backend/controllers/chatController.js:1048:28)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async file:///E:/MachineApps/logos-main/backend/controllers/appController.js:137:5
+2026-08-06T17:24:29.533Z Generate Title Error: Error: Ollama Error (404)
+    at runModel (file:///E:/MachineApps/logos-main/backend/controllers/chatController.js:1048:28)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async file:///E:/MachineApps/logos-main/backend/controllers/appController.js:137:5

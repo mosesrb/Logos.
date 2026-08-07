@@ -1,31 +1,37 @@
 # LÓGOS AI - Project Status
 
-**Current Date**: 2026-05-18
-**Project Version**: v0.5.0 (Beta Ready - Modular Architecture)
+**Current Date**: 2026-08-07
+**Project Version**: v0.6.0 (Multi-Phase Refactor & Hardening)
 
 ## ✅ Current Features (Stable)
 
 ### 1. Unified Interface
 - **Agentic Operations Desk**: Multi-panel dashboard for real-time agent orchestration with streaming interaction.
 - **Neural Database Manager (NEURAL_DATA_ARCHITECT)**: Modular React-based CRUD dashboard mapping relational tables (`SESSIONS`, `MESSAGES`, etc.) with inline editing. Includes a bone-white "Solaris" light mode fallback for high contrast accessibility.
+- **Modular Frontend Architecture**: Refactored monolithic components into specialized hooks (`useChatTransport`, `useStore`) and modular components, utilizing `Zustand` for global state management.
 
 ### 2. Autonomous Agentic Tools
 - **Filesystem Tools & Autonomous Artifacts**: Agents can read, list, and create local files (`agentWriteFile`).
 - **Live UI Preview Sandbox**: Real-time rendering of generated HTML/SVG/Image artifacts inside the AgentDesk with interactive viewport resizing and iframe isolation.
 - **Syntax Verification**: Integrated Python (`py_compile`) and Node.js (`--check`) validation for generated files ensures "Zero-Click" artifact generation is functional.
+- **Multi-Agent Swarms**: Backend explicitly supports structured agent collaboration via Debates, Pipelines, and parallel generations decoupled into dedicated services (`debateService`, `pipelineService`).
 
 ### 3. Resilience & Error Handling
-- **Indestructible Fallback Engine**: Multi-pass JSON repair pipeline and Markdown Block Hijacking to recover broken model outputs.
+- **Indestructible Fallback Engine**: Multi-pass JSON repair pipeline and Markdown Block Hijacking to recover broken model outputs. Integrated `jsonrepair` for highly robust LLM payload parsing (`parseCleanAnswer`).
 - **Heartbeat Connection Guard**: 5-second SSE pulse system keeps frontend terminal alive during long inference.
+- **Non-blocking Event Loop**: Asynchronous `fs.promises.appendFile` powers logging without degrading server concurrency.
 
-### 4. Memory Palace (SQLite)
+### 4. Memory Palace (SQLite & IPC)
 - **Episodic Persistence & Local Sovereignty**: Long-term zero-telemetry storage of user preferences, task history, and persona traits.
+- **Robust IPC Integration**: Seamless streaming to the Nexus python engine via `stdin/stdout` rather than legacy `.txt` file polling.
+- **Context Window Management**: Advanced token sliding window implementation to prevent VRAM overflow dynamically.
 
 ### 5. Modular Architecture & DevOps
-- **Backend Controllers & Frontend Hooks**: Completed full cleanup of legacy monolithic code. The application now uses modular React hooks (`useChatState`, `useChatEngine`, etc.) and Express controllers (`databaseController.js`, `appController.js`, etc.) with properly decoupled architecture.
-- **Testing & Containerization**: Robust testing suite powered by Vitest, and cross-platform Docker containerization.
-- **Hardened Security**: Implemented strict jail boundaries and path sanitization for all agentic filesystem tools.
-- **Concurrent Database Operations**: SQLite runs in WAL mode to handle parallel AI generation and UI requests safely.
+- **Backend Controllers & Providers**: Deep decoupling of models with `BaseProvider` and `OllamaProvider`.
+- **Testing & Containerization**: Robust testing suite powered by Vitest & Jest, automated via GitHub Actions (`.github/workflows/test.yml`).
+- **Hardened Security**: Implemented strict jail boundaries and path sanitization for all agentic filesystem tools, alongside heuristic blocks for Prompt Injection / Jailbreak attacks.
+- **Code Quality**: Enforced standardized linting across the stack using `eslint.config.mjs` running Node.js and React recommended rules.
+- **Concurrent Database Operations**: SQLite runs in WAL mode to handle parallel AI generation and UI requests safely, managed cleanly via `AsyncQueue`.
 
 ## 🛠️ Work in Progress / Active Development
 
@@ -44,7 +50,7 @@
 ## 🚀 Roadmap
 - [ ] **Browser-Use Integration**: Enabling agents to research and interact with web documentation.
 - [ ] **Vector Search Enrichment**: Moving from keyword memory to semantic retrieval (RAG).
-- [ ] **Multi-Agent Swarms**: Collaborative sessions where specialized personas work in parallel.
+- [x] **Multi-Agent Swarms**: Collaborative sessions where specialized personas work in parallel.
 - [x] **Live UI Preview**: Real-time rendering of generated artifacts.
 
 ---

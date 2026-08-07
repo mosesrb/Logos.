@@ -99,11 +99,34 @@ export async function buildCognitiveContext(persona, userMessage, options = {}) 
 
   const memoryText = memoryParts.join('\n\n');
 
-  // 6. Format Recent Context
-  const recentContext = recentMessages
-    .slice(-10)
-    .map(m => `${m.role.toUpperCase()}: ${m.content.slice(0, 200)}${m.content.length > 200 ? '...' : ''}`)
-    .join('\n');
+  // 6. Format Recent Context (Token-sliding window strategy)
+  // Approximate 1 token = 4 chars
+  const MAX_CONTEXT_TOKENS = 4000;
+  const MAX_CONTEXT_CHARS = MAX_CONTEXT_TOKENS * 4;
+  let currentChars = 0;
+  const slidingWindowMessages = [];
+
+  // Iterate backwards from the most recent message
+  for (let i = recentMessages.length - 1; i >= 0; i--) {
+    const msg = recentMessages[i];
+    const msgText = `${msg.role.toUpperCase()}: ${msg.content}`;
+    
+    if (currentChars + msgText.length <= MAX_CONTEXT_CHARS) {
+      slidingWindowMessages.unshift(msgText);
+      currentChars += msgText.length;
+    } else {
+      // If a single message is huge, we might need to truncate it if it's the very first one we're processing,
+      // but generally we just stop including older messages.
+      if (slidingWindowMessages.length === 0) {
+        // Must include at least part of the most recent message
+        const availableChars = MAX_CONTEXT_CHARS - currentChars - msg.role.length - 3;
+        slidingWindowMessages.unshift(`${msg.role.toUpperCase()}: ${msg.content.slice(0, availableChars)}...[TRUNCATED]`);
+      }
+      break; // Reached token limit
+    }
+  }
+
+  const recentContext = slidingWindowMessages.join('\n');
 
   // 7. Build Context Object
   const context = {

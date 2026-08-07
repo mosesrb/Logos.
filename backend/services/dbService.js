@@ -110,7 +110,7 @@ export async function syncPersona(p) {
         return;
     }
 
-    const sql = `INSERT OR REPLACE INTO Personas (id, name, description, system_prompt, updated_at, metadata) VALUES (?, ?, ?, ?, ?, ?)`;
+    const sql = `INSERT INTO Personas (id, name, description, system_prompt, updated_at, metadata) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, description=excluded.description, system_prompt=excluded.system_prompt, updated_at=excluded.updated_at, metadata=excluded.metadata`;
     const metadata = JSON.stringify({
         // Core behavior
         goal: p.goal || "",
@@ -143,13 +143,13 @@ export async function syncPersona(p) {
 
 /** Synchronize a Session entry */
 export async function syncSession(s) {
-    const sql = `INSERT OR REPLACE INTO Sessions (id, title, updated_at, summary) VALUES (?, ?, ?, ?)`;
+    const sql = `INSERT INTO Sessions (id, title, updated_at, summary) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title=excluded.title, updated_at=excluded.updated_at, summary=excluded.summary`;
     return runQuery(sql, [s.id, s.title || "Untitled Session", s.updatedAt || new Date().toISOString(), s.summary || ""]);
 }
 
 /** Synchronize a single Message */
 export async function syncMessage(msg, sessionId) {
-    const sql = `INSERT OR REPLACE INTO Messages (id, session_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)`;
+    const sql = `INSERT INTO Messages (id, session_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET session_id=excluded.session_id, role=excluded.role, content=excluded.content, timestamp=excluded.timestamp`;
     const id = msg.id || `${sessionId}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
     return runQuery(sql, [id, sessionId, msg.role, content, msg.time || new Date().toISOString()]);
@@ -158,13 +158,13 @@ export async function syncMessage(msg, sessionId) {
 /** Synchronize Relationship data */
 export async function syncRelationship(relKey, data) {
     const personaId = relKey.includes("_") ? relKey.split("_")[1] : relKey;
-    const sql = `INSERT OR REPLACE INTO Relationships (id, persona_id, trust_level, notes, last_interaction) VALUES (?, ?, ?, ?, ?)`;
+    const sql = `INSERT INTO Relationships (id, persona_id, trust_level, notes, last_interaction) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET persona_id=excluded.persona_id, trust_level=excluded.trust_level, notes=excluded.notes, last_interaction=excluded.last_interaction`;
     return runQuery(sql, [relKey, personaId, data.trust || 50, data.notes || "", data.last_interaction || new Date().toISOString()]);
 }
 
 /** Synchronize Visual Memory */
 export async function syncVisualMemory(img) {
-    const sql = `INSERT OR REPLACE INTO VisualMemory (image_id, persona_id, file_name, url, embedding_json, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+    const sql = `INSERT INTO VisualMemory (image_id, persona_id, file_name, url, embedding_json, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(image_id) DO UPDATE SET persona_id=excluded.persona_id, file_name=excluded.file_name, url=excluded.url, embedding_json=excluded.embedding_json, metadata_json=excluded.metadata_json, created_at=excluded.created_at`;
     return runQuery(sql, [
         img.image_id, 
         img.persona, 
@@ -178,7 +178,7 @@ export async function syncVisualMemory(img) {
 
 /** Settings Management */
 export async function upsertSetting(key, value) {
-    const sql = `INSERT OR REPLACE INTO Settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`;
+    const sql = `INSERT INTO Settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP`;
     const valStr = typeof value === 'string' ? value : JSON.stringify(value);
     return runQuery(sql, [key, valStr]);
 }

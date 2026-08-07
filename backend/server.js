@@ -7,10 +7,12 @@ import { setupModelsRoutes } from "./controllers/modelsController.js";
 import { setupDatabaseRoutes } from "./controllers/databaseController.js";
 import { setupRagRoutes } from "./controllers/ragController.js";
 import { setupAppRoutes } from "./controllers/appController.js";
-import { setupChatRoutes } from "./controllers/chatController.js";
 import { setupExtraRoutes } from "./controllers/extraController.js";
 import { setupArtifactRoutes } from "./controllers/artifactController.js";
-import { runModel, parseCleanAnswer } from "./controllers/chatController.js";
+import { setupChatRoutes } from "./controllers/chatController.js";
+import { parseCleanAnswer } from "./utils/textUtils.js";
+import { llmProvider } from "./services/llm/index.js";
+const runModel = llmProvider.runModel.bind(llmProvider);
 import { routeModel, buildHybridOptions, getModelRegistry, getModelTier } from "./modelRouter.js";
 import { startInboxWatcher } from "./imageInboxWatcher.js";
 import cors from "cors";
@@ -45,9 +47,10 @@ import {
 } from "./services/ragService.js";
 import { getSystemStats, modelMetricsStore } from "./services/systemService.js";
 import { runQuery, getQuery, syncPersona, syncSession, syncMessage, syncRelationship, getSession } from "./services/dbService.js";
+import { generateViaComfyUI, _comfyFallback, COMFYUI_INSTALL_DIR } from "./services/comfyuiService.js";
 
 // Safety: Utility model for background tasks (e.g. metadata refinement, self-captioning)
-const UTILITY_MODEL = process.env.UTILITY_MODEL || "gemma2:2b";
+const UTILITY_MODEL = process.env.UTILITY_MODEL || "qwen2:1.5b";
 
 import { cleanImages, embedText, chunkText, cosineSimilarity } from "./utils/textUtils.js";
 
@@ -205,12 +208,8 @@ app.use((req, _res, next) => {
   next();
 });
 
-// Origin check + legacy security headers (must run before helmet to keep our explicit values)
+// Legacy security headers (must run before helmet to keep our explicit values)
 app.use((req, res, next) => {
-  const origin = req.get("origin");
-  if (origin && !allowedOrigins.has(origin)) {
-    return res.status(403).json({ error: "ORIGIN_NOT_ALLOWED" });
-  }
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "no-referrer");
@@ -238,8 +237,12 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin(origin, callback) {
-    return callback(null, !origin || allowedOrigins.has(origin));
+  origin: function (origin, callback) {
+    if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type"],
@@ -291,17 +294,6 @@ if (!fs.existsSync(TEMP_OCR_DIR)) fs.mkdirSync(TEMP_OCR_DIR, { recursive: true }
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(AUDIO_CACHE_DIR)) fs.mkdirSync(AUDIO_CACHE_DIR, { recursive: true });
 
-// Phase 11.5 / 12: ComfyUI Paths & Unified Output Serving
-const COMFYUI_BASE = "http://127.0.0.1:8188";
-const COMFYUI_INSTALL_DIR = "E:\\MachineApps\\ComfyUI";
-const COMFYUI_WORKFLOW_PATH = path.join(__dirname, "comfyui", "workflows", "workflow_api.json");
-const COMFYUI_REAL_OUTPUT_DIR = "E:\\MachineApps\\ComfyUI\\ComfyUI\\output";
-
-// Phase 12.5: VRAM Optimization
-const LOW_VRAM_MODE = true; // Set to true for 8GB GPUs
-const COMFYUI_OPTIMIZED_WORKFLOW_PATH = path.join(__dirname, "comfyui", "workflows", "sdxl_optimized_workflow.json");
-const COMFYUI_LIGHTNING_WORKFLOW_PATH = path.join(__dirname, "comfyui", "workflows", "lightning_uncensored.json");
-
 const OUTPUT_DIR = path.join(__dirname, "output");
 if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
@@ -314,7 +306,7 @@ const PERSONAS_DIR = path.join(DATA_DIR, "personas");
 
 // Ingress Logging for Forensics
 app.use((req, res, next) => {
-  console.log(`[INGRESS] ${new Date().toISOString()} | ${req.id || '-'} | ${req.method} ${req.url}`);
+  console.log(`[INGRESS] ${new Date().toISOString()} | ${req.id || '-'} | ${req.method} ${req.url} | Origin: ${req.get("origin")}`);
   
   // Anti-404: Auto-correct session IDs that lost their slash in the path
   if (req.url.startsWith("/api/session-")) {
@@ -395,7 +387,30 @@ function assertSafeSessionId(sessionId) {
 
 // T6/T8: Model metrics and concurrency guard now managed by systemService
 const modelMetrics = modelMetricsStore.metrics;
-let activeHeavyModels = 0; // keep local reference for T8 guard
+// Heavy Model Concurrency Queue
+class AsyncQueue {
+  constructor(concurrency) {
+    this.concurrency = concurrency;
+    this.active = 0;
+    this.queue = [];
+  }
+  async run(task) {
+    if (this.active >= this.concurrency) {
+      await new Promise(resolve => this.queue.push(resolve));
+    }
+    this.active++;
+    try {
+      return await task();
+    } finally {
+      this.active--;
+      if (this.queue.length > 0) {
+        const next = this.queue.shift();
+        next();
+      }
+    }
+  }
+}
+const heavyTaskQueue = new AsyncQueue(1);
 const MAX_CONCURRENT_HEAVY = 1;
 
 function getChatPath(id) {
@@ -433,279 +448,7 @@ import {
   globalMemory
 } from "./services/memoryService.js";
 
-// ---------- PHASE 11.5 / 12: ComfyUI Fetch Wrapper & Poller ----------
-/**
- * Loads workflow_api.json, injects real prompt + reference paths,
- * posts to ComfyUI, polls /history until done, returns /output/{filename}.
- * Falls back gracefully if ComfyUI is offline.
- */
-async function generateViaComfyUI(payload) {
-  const { 
-    prompt, 
-    references = [], 
-    seed, 
-    filename: requestedFilename,
-    mode = "fast", // "fast" (4 steps) | "quality" (20-30 steps)
-    lora_strength = 0.7,
-    ipadapter_weight = 0.7,
-    batch_size = 1
-  } = payload.data || payload;
-
-  const filename = requestedFilename || `gen_${Date.now()}`;
-  console.log(`🚀 COMFYUI: Preparing workflow for prompt: "${(prompt || "").slice(0, 60)}..."`);
-
-  // Step 1: Load workflow template 
-  // We now prioritize LIGHTNING_WORKFLOW as the new optimized standard
-  let workflow;
-  const workflowPath = fs.existsSync(COMFYUI_LIGHTNING_WORKFLOW_PATH) 
-    ? COMFYUI_LIGHTNING_WORKFLOW_PATH 
-    : (LOW_VRAM_MODE ? COMFYUI_OPTIMIZED_WORKFLOW_PATH : COMFYUI_WORKFLOW_PATH);
-
-  try {
-    const raw = fs.readFileSync(workflowPath, "utf8");
-    workflow = JSON.parse(raw);
-    console.log(`👤 COMFYUI: Using ${path.basename(workflowPath)} template [Mode: ${mode.toUpperCase()}].`);
-  } catch (e) {
-    console.warn(`⚠️ COMFYUI: Could not load workflow ${workflowPath}:`, e.message);
-    return _comfyFallback(filename);
-  }
-
-  // Dynamic ComfyUI API Parsing
-  let hasInjectedPrompt = false;
-  
-  // Refactored: Find nodes by type instead of ID
-  const findNodesByType = (type) => Object.entries(workflow).filter(([k, n]) => n.class_type === type);
-
-  // 1. Output Filename & Batch Size
-  findNodesByType("SaveImage").forEach(([k, n]) => {
-    n.inputs.filename_prefix = filename;
-  });
-  findNodesByType("EmptyLatentImage").forEach(([k, n]) => {
-    n.inputs.batch_size = Math.min(Math.max(batch_size, 1), 4); // Limit to 4 for safety
-  });
-
-  // 2. Seed & Mode (Steps/CFG)
-  const samplerTypes = ["KSampler", "SamplerCustom", "KSamplerAdvanced"];
-  samplerTypes.forEach(type => {
-    findNodesByType(type).forEach(([k, n]) => {
-      if (seed !== undefined) n.inputs.seed = seed;
-      else n.inputs.seed = Math.floor(Math.random() * 1000000);
-      
-      // Lightning Logic: Fast (4 steps) vs Quality (20 steps)
-      if (mode === "quality") {
-        n.inputs.steps = 20; 
-        n.inputs.cfg = 6.0; // Higher CFG for full models
-        console.log(`🎨 COMFYUI: Quality Mode engaged (20 steps).`);
-      } else {
-        n.inputs.steps = 4;
-        n.inputs.cfg = 1.7; // Spec-recommended for Lightning
-      }
-    });
-  });
-
-  // 3. LoRA Handling (Smart Bypass if missing)
-  const loraNodes = findNodesByType("LoraLoader");
-  loraNodes.forEach(([k, n]) => {
-    const loraName = n.inputs.lora_name;
-    const loraLocalPath = path.join(COMFYUI_INSTALL_DIR, "ComfyUI", "models", "loras", loraName);
-    
-    let exists = fs.existsSync(loraLocalPath);
-    if (exists) {
-      const stats = fs.statSync(loraLocalPath);
-      if (stats.size < 1024 * 1024) { // Less than 1MB is likely an error page/fake
-        console.warn(`⚠️ COMFYUI: LoRA [${loraName}] is too small (${stats.size} bytes). Treating as missing.`);
-        exists = false;
-      }
-    }
-    
-    if (!exists) {
-      console.warn(`⚠️ COMFYUI: LoRA [${loraName}] not found. Bypassing node ${k}...`);
-      
-      // Reroute connections: anything pointing to this LoRA should point to its inputs instead
-      const baseModelSource = n.inputs.model;
-      const baseClipSource = n.inputs.clip;
-
-      Object.values(workflow).forEach(node => {
-        if (node.inputs) {
-          Object.keys(node.inputs).forEach(inputKey => {
-            const link = node.inputs[inputKey];
-            if (Array.isArray(link) && link[0] === k) {
-               // If it was linked to LoRA MODEL (output 0)
-               if (link[1] === 0) node.inputs[inputKey] = baseModelSource;
-               // If it was linked to LoRA CLIP (output 1)
-               if (link[1] === 1) node.inputs[inputKey] = baseClipSource;
-            }
-          });
-        }
-      });
-      delete workflow[k]; // Safe to remove after rerouting
-    } else {
-      n.inputs.strength_model = parseFloat(lora_strength);
-      n.inputs.strength_clip = parseFloat(lora_strength);
-    }
-  });
-
-  // 4. IPAdapter Weight
-  findNodesByType("IPAdapter").forEach(([k, n]) => {
-    n.inputs.weight = parseFloat(ipadapter_weight);
-  });
-
-  // 3. Text Prompts (Primary)
-  findNodesByType("CLIPTextEncode").forEach(([k, n]) => {
-    if (!hasInjectedPrompt) {
-      n.inputs.text = prompt || "a beautiful image";
-      hasInjectedPrompt = true;
-    }
-  });
-
-  // 4. IPAdapter Reference Injection
-  const loadNodes = findNodesByType("LoadImage");
-  if (references.length > 0) {
-    for (const refPath of references) {
-      const freeNode = loadNodes.find(([k, n]) => !n._has_injected_ref);
-      if (freeNode) {
-        const [key, node] = freeNode;
-        if (fs.existsSync(refPath)) {
-          const inputDir = path.join(COMFYUI_INSTALL_DIR, "ComfyUI", "input");
-          if (!fs.existsSync(inputDir)) fs.mkdirSync(inputDir, { recursive: true });
-          const refFilename = `persona_ref_${Date.now()}_${Math.floor(Math.random()*1000)}${path.extname(refPath)}`;
-          const destPath = path.join(inputDir, refFilename);
-          try {
-            fs.copyFileSync(refPath, destPath);
-            node.inputs.image = refFilename;
-            node._has_injected_ref = true;
-            console.log(`👤 COMFYUI: Copied and Injected reference -> Node ${key}: ${refFilename}`);
-          } catch (e) {
-            console.error(`❌ COMFYUI: Reference failure:`, e.message);
-          }
-        }
-      }
-    }
-  }
-
-  // Phase 12.5: Dynamic Rewiring for non-persona generation (Bypass IPAdapter)
-  let usedRef = false;
-  Object.values(workflow).forEach(n => { if (n._has_injected_ref) usedRef = true; });
-
-  if (!usedRef) {
-     const adapters = findNodesByType("IPAdapterApply") || findNodesByType("IPAdapter");
-     if (adapters.length > 0) {
-        console.log("👤 COMFYUI: No references. Rewiring workflow to bypass IPAdapters...");
-        adapters.forEach(([id, node]) => {
-           // Find what's connected to this adapter's 'model' input and connect it to the sampler's 'model' input instead
-           const sourceModel = node.inputs.model;
-           
-           // Find the sampler that uses this adapter's output
-           Object.entries(workflow).forEach(([sk, sn]) => {
-              if (sn.inputs && sn.inputs.model && sn.inputs.model[0] === id) {
-                 sn.inputs.model = sourceModel;
-                 console.log(`👤 COMFYUI: Rewired Sampler ${sk} to use Model ${sourceModel[0]} (Bypassed Adapter ${id})`);
-              }
-           });
-           
-           // Disable/Delete the adapter chains
-           delete workflow[id];
-        });
-     } else {
-        // Legacy fallback
-        const samplerId = LOW_VRAM_MODE ? "5" : "3";
-        const loaderId = LOW_VRAM_MODE ? "1" : "28";
-        const adapterId = "10";
-        if (workflow[adapterId] && workflow[samplerId]) {
-           workflow[samplerId].inputs.model = [ loaderId, 0 ];
-           delete workflow[adapterId];
-        }
-     }
-  }
-
-  // Step 6: POST to ComfyUI /prompt
-  let promptId;
-  try {
-    const postRes = await fetch(`${COMFYUI_BASE}/prompt`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: workflow }),
-    });
-    if (!postRes.ok) throw new Error(`ComfyUI POST failed: ${postRes.status}`);
-    const postData = await postRes.json();
-    promptId = postData.prompt_id;
-    console.log(`⏱️ COMFYUI: Queued! prompt_id = ${promptId}`);
-  } catch (e) {
-    console.warn("⚠️ COMFYUI: POST failed (is ComfyUI running?):", e.message);
-    return _comfyFallback(filename);
-  }
-
-  // Step 7: Polling loop — GET /history/{promptId}
-  const MAX_WAIT_MS = 300 * 1000; // 5 minutes for large model loading
-  const POLL_INTERVAL_MS = 2000;
-  const startTime = Date.now();
-  const outputFilenames = [];
-
-  while (Date.now() - startTime < MAX_WAIT_MS) {
-    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-    try {
-      const histRes = await fetch(`${COMFYUI_BASE}/history/${promptId}`);
-      if (!histRes.ok) continue;
-      const hist = await histRes.json();
-      const entry = hist[promptId];
-      if (!entry) continue;
-
-      if (entry.status && entry.status.completed) {
-        if (entry.outputs) {
-          // Step 8: Extract all filenames from the SaveImage node output
-          const outputs = Object.values(entry.outputs);
-          for (const out of outputs) {
-            if (out.images && out.images.length > 0) {
-              out.images.forEach(img => outputFilenames.push(img.filename));
-            }
-          }
-        }
-        break; 
-      }
-      console.log(`   ...polling ComfyUI (${Math.round((Date.now()-startTime)/1000)}s elapsed)`);
-    } catch (e) { /* keep polling */ }
-  }
-
-  if (outputFilenames.length === 0) {
-    console.warn("⚠️ COMFYUI: Timed out waiting for output. Using fallback.");
-    const fallback = _comfyFallback(filename);
-    return [fallback];
-  }
-
-  // Step 9: Copy from ComfyUI output to our served output folder
-  const results = [];
-  try {
-    for (const f of outputFilenames) {
-      const sourcePath = path.join(COMFYUI_REAL_OUTPUT_DIR, f);
-      const destPath = path.join(path.join(__dirname, "output"), f);
-      if (fs.existsSync(sourcePath)) {
-        fs.copyFileSync(sourcePath, destPath);
-        results.push(`/output/${f}`);
-      }
-    }
-    console.log(`✅ COMFYUI: Copied ${results.length} files to local output.`);
-  } catch (e) {
-    console.error(`❌ COMFYUI: Copy failed:`, e.message);
-    const fallback = _comfyFallback(filename);
-    return [fallback];
-  }
-
-  return results;
-}
-
-/** Graceful fallback — creates a blank placeholder and returns a mock path */
-function _comfyFallback(filename) {
-  const fallbackFilename = `fallback_${filename}_${Date.now()}.png`;
-  const destDir = path.join(__dirname, "output");
-  if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
-  const fallbackPath = path.join(destDir, fallbackFilename);
-  try { 
-    // Create a 1x1 black pixel or empty file
-    fs.writeFileSync(fallbackPath, ""); 
-  } catch(e) {}
-  console.warn(`   ↳ Fallback placeholder written: ${fallbackFilename}`);
-  return `/output/${fallbackFilename}`;
-}
+// ComfyUI logic extracted to comfyuiService.js
 
 // Phase 13: Start inbox watcher after server is fully initialized
 startInboxWatcher(PERSONA_INBOX_DIR, (...args) => indexImageMemory({ UTILITY_MODEL, runModel, getPersonas: () => personas }, ...args));
@@ -1013,10 +756,7 @@ const context = {
   TESSERACT_BIN,
   extractDocumentText,
   indexDocumentChunks,
-  getActiveHeavyModels: () => activeHeavyModels,
-  incrementHeavyModels: () => activeHeavyModels++,
-  decrementHeavyModels: () => activeHeavyModels--,
-  MAX_CONCURRENT_HEAVY,
+  heavyTaskQueue,
   buildFullPrompt,
   getModelOptions,
   globalMemory,
@@ -1063,6 +803,12 @@ if (!process.env.SKIP_SERVER) {
     console.log(`🔗 ACCESS_MAP: http://127.0.0.1:${PORT}`);
     if (!TESSERACT_BIN) console.warn("⚠️ tesseract CLI not found. OCR fallback disabled until installed and added to PATH.");
   });
+
+  // Increase timeouts for long-running AI streams
+  _httpServer.setTimeout(600000); // 10 minutes
+  _httpServer.keepAliveTimeout = 600000;
+  _httpServer.headersTimeout = 600000;
+
 
   // Handle graceful shutdown for port clearance
   const shutdown = (signal) => {

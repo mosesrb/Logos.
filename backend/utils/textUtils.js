@@ -1,4 +1,5 @@
 import { pipeline } from "@xenova/transformers";
+import { jsonrepair } from "jsonrepair";
 
 // ---------- Vector Embedding Setup ----------
 let extractor = null;
@@ -57,3 +58,66 @@ export const cleanImages = (imgs) => {
   if (!Array.isArray(imgs)) return [];
   return imgs.map(img => (typeof img === "string" && img.includes("base64,")) ? img.split("base64,")[1] : img);
 };
+
+// Helper for extracting clean answers when JSON options are forced
+export function parseCleanAnswer(rawOutput) {
+  if (!rawOutput) return "";
+  
+  // Phase 5.4: Structured Output Parsing (try JSON first)
+  try {
+    let jsonStr = rawOutput
+      .replace(/^```json\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+      
+    // Attempt to repair and parse
+    const repaired = jsonrepair(jsonStr);
+    const parsed = JSON.parse(repaired);
+    
+    // If it parsed into an object, extract a text field if common, or return the stringified JSON
+    if (parsed && typeof parsed === "object") {
+      if (parsed.response) return String(parsed.response);
+      if (parsed.content) return String(parsed.content);
+      if (parsed.answer) return String(parsed.answer);
+      return JSON.stringify(parsed, null, 2);
+    }
+  } catch (e) {
+    // Not valid JSON, proceed to standard tag stripping
+  }
+
+  // 1. Initial cleanup: Remove standard wrappers and markdown blocks
+  let cleaned = rawOutput
+    .replace(/^Response:\s*/i, '')
+    .replace(/^JSON_SCHEMA\s*/i, '')
+    .replace(/^```json\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
+
+  // 2. High-Fidelity Tag Extraction: Support [FINAL ANSWER] and [FINAL_ANSWER]
+  const finalAnswerMarkers = ["[FINAL ANSWER]", "[FINAL_ANSWER]", "FINAL ANSWER:", "FINAL_ANSWER:"];
+  for (const marker of finalAnswerMarkers) {
+    if (cleaned.includes(marker)) {
+      const parts = cleaned.split(marker);
+      let candidate = parts[parts.length - 1].trim();
+      if (!candidate && parts.length > 1) {
+        candidate = parts[parts.length - 2].trim();
+      }
+      cleaned = candidate;
+      break; 
+    }
+  }
+
+  // 3. Command Blackhole Filter: Strip raw tool calls
+  const toolCallRegex = /['"]?[\w_]+['"]?\s*\{[\s\S]*?\}\s*/g;
+  const funcCallRegex = /[\w_]+\s*\([\s\S]*?\)\s*/g;
+  cleaned = cleaned.replace(toolCallRegex, "").replace(funcCallRegex, "").trim();
+
+  // 4. Brute-Force Tag Strip: Fuzzy matching
+  const agenticTags = /\[(?:THOUGHT|ACTION|TOOL[\s_]INPUT|RESULT|RESPONSE|INTERIM[\s_]MESSAGE|SYNTHESIZING|FINAL[\s_]ANSWER|REASONING|PLAN|THOUGHT[\s_]PROCESS)\]/gi;
+  cleaned = cleaned.replace(agenticTags, "").trim();
+
+  return cleaned
+    .replace(/^(Thought|Action|Tool[\s_]Input):\s*/gim, "")
+    .replace(/\[|\]/g, "") 
+    .trim();
+}

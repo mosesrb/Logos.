@@ -1,3 +1,4 @@
+import { useStore } from './store/useStore.js';
 import React, { useEffect, useRef, useState } from "react";
 import { apiFetch } from "./services/apiClient";
 import "./index.css";
@@ -36,61 +37,209 @@ export default function App() {
   const API_BASE = "http://127.0.0.1:3008";
   const API = `${API_BASE}/api`;
 
-  const [sessions, setSessions] = useState([]);
-  const [currentSession, setCurrentSession] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-  const [models, setModels] = useState([]);
-  const [selectedPersonaIds, setSelectedPersonaIds] = useState([]);
-  const [selectedModelSingle, setSelectedModelSingle] = useState(undefined);
-  const [interactionMode, setInteractionMode] = useState("Normal");
-  const [isAgentTerminalActive, setAgentTerminalActive] = useState(false);
-  const [activeView, setActiveView] = useState('chat'); // 'chat' | 'agent-desk'
-  const [webMode, setWebMode] = useState(false);
-  const [ragMode, setRagMode] = useState(false);
-  const [unrestrictedMode, setUnrestrictedMode] = useState(false);
+  const {
+    sessions,
+    setSessions,
+    currentSession,
+    setCurrentSession,
+    messages,
+    setMessages,
+    input,
+    setInput,
+    models,
+    setModels,
+    selectedPersonaIds,
+    setSelectedPersonaIds,
+    selectedModelSingle,
+    setSelectedModelSingle,
+    interactionMode,
+    setInteractionMode,
+    isAgentTerminalActive,
+    setAgentTerminalActive,
+    activeView,
+    setActiveView,
+    webMode,
+    setWebMode,
+    ragMode,
+    setRagMode,
+    unrestrictedMode,
+    setUnrestrictedMode,
+    selectedNode,
+    setSelectedNode,
+    editNodeText,
+    setEditNodeText,
+    isSyncingMemory,
+    setIsSyncingMemory,
+    darkMode,
+    setDarkMode,
+    sidebarWidth,
+    setSidebarWidth,
+    diagnosticsWidth,
+    setDiagnosticsWidth,
+    lastUserMessage,
+    setLastUserMessage,
+    copiedMsgId,
+    setCopiedMsgId,
+    isRegenerating,
+    setIsRegenerating,
+    showModelDropdown,
+    setShowModelDropdown,
+    showJudgeDropdown,
+    setShowJudgeDropdown,
+    uploadStatus,
+    setUploadStatus,
+    debateTurns,
+    setDebateTurns,
+    judgePersonaId,
+    setJudgePersonaId,
+    isStreaming,
+    setIsStreaming,
+    streamingBlocks,
+    setStreamingBlocks,
+    terminalLogs,
+    setTerminalLogs,
+    sessionFiles,
+    setSessionFiles,
+    pipelineStatus,
+    setPipelineStatus,
+    metrics,
+    setMetrics,
+    sysStats,
+    setSysStats,
+    scrollLock,
+    setScrollLock,
+    visionBuffer,
+    setVisionBuffer,
+    isListening,
+    setIsListening,
+    activeTerminalTab,
+    setActiveTerminalTab,
+    synapsePreset,
+    setSynapsePreset,
+    synapsePresets,
+    setSynapsePresets,
+    autoRead,
+    setAutoRead,
+    selectedVoice,
+    setSelectedVoice,
+    personas,
+    setPersonas,
+    selectedPersonaId,
+    setSelectedPersonaId,
+    personaMap,
+    setPersonaMap,
+    scenarios,
+    setScenarios,
+    selectedScenarioId,
+    setSelectedScenarioId,
+    showPersonaForge,
+    setShowPersonaForge,
+    editingPersona,
+    setEditingPersona,
+    forgeTab,
+    setForgeTab,
+    moodHistory,
+    setMoodHistory,
+    heatmapEnabled,
+    setHeatmapEnabled,
+    showUserProfile,
+    setShowUserProfile,
+    personaMood,
+    setPersonaMood,
+    pendingTrigger,
+    setPendingTrigger,
+    showScenarioBuilder,
+    setShowScenarioBuilder,
+    editingScenario,
+    setEditingScenario,
+    hiddenIntents,
+    setHiddenIntents,
+    roleModelMap,
+    setRoleModelMap,
+    evaluation,
+    setEvaluation,
+    isEvaluating,
+    setIsEvaluating,
+    forgeSaveStatus,
+    setForgeSaveStatus,
+    simulationChaos,
+    setSimulationChaos,
+    vectorNodes,
+    setVectorNodes,
+    pinnedMemories,
+    setPinnedMemories,
+    expandedImage,
+    setExpandedImage,
+    mapTransform,
+    setMapTransform,
+    isDraggingMap,
+    setIsDraggingMap,
+    dragStart,
+    setDragStart,
+    mapHasMoved,
+    setMapHasMoved,
+    showDbManager,
+    setShowDbManager,
+    logs,
+    setLogs
+  } = useStore();
+
+
+  // const [sessions, setSessions] = useState([]);
+  // const [currentSession, setCurrentSession] = useState(null);
+  // const [messages, setMessages] = useState([]);
+  // const [input, setInput] = useState("");
+  // const [models, setModels] = useState([]);
+  // const [selectedPersonaIds, setSelectedPersonaIds] = useState([]);
+  // const [selectedModelSingle, setSelectedModelSingle] = useState(undefined);
+  // const [interactionMode, setInteractionMode] = useState("Normal");
+  // const [isAgentTerminalActive, setAgentTerminalActive] = useState(false);
+  // const [activeView, setActiveView] = useState('chat'); // 'chat' | 'agent-desk'
+  // const [webMode, setWebMode] = useState(false);
+  // const [ragMode, setRagMode] = useState(false);
+  // const [unrestrictedMode, setUnrestrictedMode] = useState(false);
   // Phase 25: Memory Editing
-  const [selectedNode, setSelectedNode] = useState(null);
-  const [editNodeText, setEditNodeText] = useState("");
-  const [isSyncingMemory, setIsSyncingMemory] = useState(false);
+  // const [selectedNode, setSelectedNode] = useState(null);
+  // const [editNodeText, setEditNodeText] = useState("");
+  // const [isSyncingMemory, setIsSyncingMemory] = useState(false);
   // Phase 26: Parthenope features
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('parthenope_dark') === 'true');
-  const [sidebarWidth, setSidebarWidth] = useState(() => parseInt(localStorage.getItem('parthenope_sidebar_w') || '240'));
-  const [diagnosticsWidth, setDiagnosticsWidth] = useState(() => parseInt(localStorage.getItem('parthenope_diag_w') || '360'));
-  const [lastUserMessage, setLastUserMessage] = useState(null);
-  const [copiedMsgId, setCopiedMsgId] = useState(null);
-  const [isRegenerating, setIsRegenerating] = useState(false);
-  const [showModelDropdown, setShowModelDropdown] = useState(false);
-  const [showJudgeDropdown, setShowJudgeDropdown] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState("");
-  const [debateTurns, setDebateTurns] = useState(2);
-  const [judgePersonaId, setJudgePersonaId] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [streamingBlocks, setStreamingBlocks] = useState([]);
-  const [terminalLogs, setTerminalLogs] = useState([]);
-  const [sessionFiles, setSessionFiles] = useState([]);
-  const [pipelineStatus, setPipelineStatus] = useState(null); // { stage: string, total: number, current: number }
-  const [metrics, setMetrics] = useState({ latency: 0, tokens: 0, vram: "0GB", tps: 0 });
-  const [sysStats, setSysStats] = useState({ cpu: 0, ram: 0, vram: 0, details: {} });
-  const [scrollLock, setScrollLock] = useState(true);
-  const [visionBuffer, setVisionBuffer] = useState([]); // Array of base64 strings
-  const [isListening, setIsListening] = useState(false);
-  const [activeTerminalTab, setActiveTerminalTab] = useState("LOGS");
-  const [synapsePreset, setSynapsePreset] = useState("code-review");
-  const [synapsePresets, setSynapsePresets] = useState([]);
-  const [autoRead, setAutoRead] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState("male_us");
-  const [personas, setPersonas] = useState([]);
-  const [selectedPersonaId, setSelectedPersonaId] = useState("");
-  const [personaMap, setPersonaMap] = useState({}); // { [modelName]: personaId }
-  const [scenarios, setScenarios] = useState([]);
-  const [selectedScenarioId, setSelectedScenarioId] = useState("");
-  const [showPersonaForge, setShowPersonaForge] = useState(false);
-  const [editingPersona, setEditingPersona] = useState(null);
-  const [forgeTab, setForgeTab] = useState("settings"); // "settings" | "history"
-  const [moodHistory, setMoodHistory] = useState([]);
-  const [heatmapEnabled, setHeatmapEnabled] = useState(false);
-  const [showUserProfile, setShowUserProfile] = useState(false); // Phase 14
+  // const [darkMode, setDarkMode] = useState(() => localStorage.getItem('parthenope_dark') === 'true');
+  // const [sidebarWidth, setSidebarWidth] = useState(() => parseInt(localStorage.getItem('parthenope_sidebar_w') || '240'));
+  // const [diagnosticsWidth, setDiagnosticsWidth] = useState(() => parseInt(localStorage.getItem('parthenope_diag_w') || '360'));
+  // const [lastUserMessage, setLastUserMessage] = useState(null);
+  // const [copiedMsgId, setCopiedMsgId] = useState(null);
+  // const [isRegenerating, setIsRegenerating] = useState(false);
+  // const [showModelDropdown, setShowModelDropdown] = useState(false);
+  // const [showJudgeDropdown, setShowJudgeDropdown] = useState(false);
+  // const [uploadStatus, setUploadStatus] = useState("");
+  // const [debateTurns, setDebateTurns] = useState(2);
+  // const [judgePersonaId, setJudgePersonaId] = useState("");
+  // const [isStreaming, setIsStreaming] = useState(false);
+  // const [streamingBlocks, setStreamingBlocks] = useState([]);
+  // const [terminalLogs, setTerminalLogs] = useState([]);
+  // const [sessionFiles, setSessionFiles] = useState([]);
+  // const [pipelineStatus, setPipelineStatus] = useState(null); // { stage: string, total: number, current: number }
+  // const [metrics, setMetrics] = useState({ latency: 0, tokens: 0, vram: "0GB", tps: 0 });
+  // const [sysStats, setSysStats] = useState({ cpu: 0, ram: 0, vram: 0, details: {} });
+  // const [scrollLock, setScrollLock] = useState(true);
+  // const [visionBuffer, setVisionBuffer] = useState([]); // Array of base64 strings
+  // const [isListening, setIsListening] = useState(false);
+  // const [activeTerminalTab, setActiveTerminalTab] = useState("LOGS");
+  // const [synapsePreset, setSynapsePreset] = useState("code-review");
+  // const [synapsePresets, setSynapsePresets] = useState([]);
+  // const [autoRead, setAutoRead] = useState(false);
+  // const [selectedVoice, setSelectedVoice] = useState("male_us");
+  // const [personas, setPersonas] = useState([]);
+  // const [selectedPersonaId, setSelectedPersonaId] = useState("");
+  // const [personaMap, setPersonaMap] = useState({}); // { [modelName]: personaId }
+  // const [scenarios, setScenarios] = useState([]);
+  // const [selectedScenarioId, setSelectedScenarioId] = useState("");
+  // const [showPersonaForge, setShowPersonaForge] = useState(false);
+  // const [editingPersona, setEditingPersona] = useState(null);
+  // const [forgeTab, setForgeTab] = useState("settings"); // "settings" | "history"
+  // const [moodHistory, setMoodHistory] = useState([]);
+  // const [heatmapEnabled, setHeatmapEnabled] = useState(false);
+  // const [showUserProfile, setShowUserProfile] = useState(false); // Phase 14
   const [userPersona, setUserPersona] = useState({
     profile: { communication_style: "balanced", prefers_depth: true, tone_preference: "neutral" },
     goals: []
@@ -112,10 +261,10 @@ export default function App() {
     imageRetrieval: true,
     availableModes: ["Normal", "Parallel", "Debate", "Collaborate", "Pipeline", "Scenario"]
   });
-  const [personaMood, setPersonaMood] = useState(null); // Phase 18
-  const [pendingTrigger, setPendingTrigger] = useState(null); // Phase 19
-  const [showScenarioBuilder, setShowScenarioBuilder] = useState(false);
-  const [editingScenario, setEditingScenario] = useState(null);
+  // const [personaMood, setPersonaMood] = useState(null); // Phase 18
+  // const [pendingTrigger, setPendingTrigger] = useState(null); // Phase 19
+  // const [showScenarioBuilder, setShowScenarioBuilder] = useState(false);
+  // const [editingScenario, setEditingScenario] = useState(null);
   const [forgeScenarioData, setForgeScenarioData] = useState({
     name: "",
     description: "",
@@ -127,24 +276,24 @@ export default function App() {
     rag_mode: false,
     unrestricted_mode: false
   });
-  const [hiddenIntents, setHiddenIntents] = useState({}); // { [role]: "agenda" }
-  const [roleModelMap, setRoleModelMap] = useState({}); // { [role]: "model" }
-  const [evaluation, setEvaluation] = useState(null); // { fidelity, progression, anomalies, synopsis }
-  const [isEvaluating, setIsEvaluating] = useState(false);
-  const [forgeSaveStatus, setForgeSaveStatus] = useState("idle");
-  const [simulationChaos, setSimulationChaos] = useState(1.0);
+  // const [hiddenIntents, setHiddenIntents] = useState({}); // { [role]: "agenda" }
+  // const [roleModelMap, setRoleModelMap] = useState({}); // { [role]: "model" }
+  // const [evaluation, setEvaluation] = useState(null); // { fidelity, progression, anomalies, synopsis }
+  // const [isEvaluating, setIsEvaluating] = useState(false);
+  // const [forgeSaveStatus, setForgeSaveStatus] = useState("idle");
+  // const [simulationChaos, setSimulationChaos] = useState(1.0);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   // LOGS or NEURAL_MAP
-  const [vectorNodes, setVectorNodes] = useState([]);
-  const [pinnedMemories, setPinnedMemories] = useState([]);
-  const [expandedImage, setExpandedImage] = useState(null);
-  const [mapTransform, setMapTransform] = useState({ x: 0, y: 0, k: 1 });
-  const [isDraggingMap, setIsDraggingMap] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [mapHasMoved, setMapHasMoved] = useState(false);
-  const [showDbManager, setShowDbManager] = useState(false);
-  const [logs, setLogs] = useState([]);
+  // const [vectorNodes, setVectorNodes] = useState([]);
+  // const [pinnedMemories, setPinnedMemories] = useState([]);
+  // const [expandedImage, setExpandedImage] = useState(null);
+  // const [mapTransform, setMapTransform] = useState({ x: 0, y: 0, k: 1 });
+  // const [isDraggingMap, setIsDraggingMap] = useState(false);
+  // const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  // const [mapHasMoved, setMapHasMoved] = useState(false);
+  // const [showDbManager, setShowDbManager] = useState(false);
+  // const [logs, setLogs] = useState([]);
   const messagesEndRef = useRef(null);
   const terminalEndRef = useRef(null);
   const lastLoadedSessionId = useRef(null);
@@ -961,8 +1110,8 @@ export default function App() {
 
     try {
         hangCheckInterval = setInterval(() => {
-            if (Date.now() - lastDataTime > 60000) { // 60s timeout
-                console.warn("⏱️ Agent Stream Timeout: No data received for 60s. Aborting.");
+            if (Date.now() - lastDataTime > 300000) { // 300s timeout
+                console.warn("⏱️ Agent Stream Timeout: No data received for 300s. Aborting.");
                 handleStopGeneration();
             }
         }, 5000);
@@ -1043,8 +1192,8 @@ export default function App() {
 
     let lastDataTime = Date.now();
     const hangCheckInterval = setInterval(() => {
-        if (Date.now() - lastDataTime > 45000) { // 45s for normal chat
-            console.warn("⏱️ Normal Stream Timeout: No data received for 45s. Aborting.");
+        if (Date.now() - lastDataTime > 300000) { // 300s for normal chat
+            console.warn("⏱️ Normal Stream Timeout: No data received for 300s. Aborting.");
             handleStopGeneration();
             clearInterval(hangCheckInterval);
         }
@@ -1676,17 +1825,11 @@ export default function App() {
 
       {activeView !== 'agent-desk' && (
         <ChatSidebar
-          sessions={sessions}
-          currentSession={currentSession}
           selectSession={selectSession}
           createSession={createSession}
           renameSession={renameSession}
           deleteSession={deleteSession}
-          sessionFiles={sessionFiles}
           deleteFile={deleteFile}
-          setShowUserProfile={setShowUserProfile}
-          setShowPersonaForge={setShowPersonaForge}
-          sidebarWidth={sidebarWidth}
         />
       )}
 
@@ -1700,53 +1843,18 @@ export default function App() {
         {/* ─── Header / Controls (hidden in Agent Desk) ─── */}
         {activeView !== 'agent-desk' && (
           <ChatHeader
-            interactionMode={interactionMode}
-            setInteractionMode={setInteractionMode}
-            setAgentTerminalActive={setAgentTerminalActive}
             INTERACTION_MODES={INTERACTION_MODES}
             MODE_DESCRIPTIONS={MODE_DESCRIPTIONS}
-            selectedPersonaId={selectedPersonaId}
-            setSelectedPersonaId={setSelectedPersonaId}
-            personas={personas}
-            showModelDropdown={showModelDropdown}
-            setShowModelDropdown={setShowModelDropdown}
-            currentSession={currentSession}
-            personaMood={personaMood}
             needsMultiModel={needsMultiModel}
-            selectedPersonaIds={selectedPersonaIds}
             togglePersonaSelection={togglePersonaSelection}
-            debateTurns={debateTurns}
-            setDebateTurns={setDebateTurns}
             DEBATE_TURN_OPTIONS={DEBATE_TURN_OPTIONS}
-            judgePersonaId={judgePersonaId}
-            setJudgePersonaId={setJudgePersonaId}
-            showJudgeDropdown={showJudgeDropdown}
-            setShowJudgeDropdown={setShowJudgeDropdown}
-            selectedScenarioId={selectedScenarioId}
-            setSelectedScenarioId={setSelectedScenarioId}
-            scenarios={scenarios}
             openScenarioBuilder={openScenarioBuilder}
-            simulationChaos={simulationChaos}
-            setSimulationChaos={setSimulationChaos}
             sendMessage={sendMessage}
             handleSnapshot={handleSnapshot}
             handleEvaluate={handleEvaluate}
-            isEvaluating={isEvaluating}
-            selectedModelSingle={selectedModelSingle}
-            darkMode={darkMode}
-            setDarkMode={setDarkMode}
             isVisionModel={isVisionModel}
             handleImageUpload={handleImageUpload}
-            webMode={webMode}
-            setWebMode={setWebMode}
-            ragMode={ragMode}
-            setRagMode={setRagMode}
-            unrestrictedMode={unrestrictedMode}
-            setUnrestrictedMode={setUnrestrictedMode}
             handleFileUpload={handleFileUpload}
-            uploadStatus={uploadStatus}
-            activeView={activeView}
-            setActiveView={setActiveView}
           />
         )}
 
@@ -1762,36 +1870,18 @@ export default function App() {
         ) : (
           <>
             <ChatInterface
-              currentSession={currentSession}
-              messages={messages}
               getMessageMeta={getMessageMeta}
-              selectedPersonaId={selectedPersonaId}
-              personaMood={personaMood}
-              isStreaming={isStreaming}
-              streamingBlocks={streamingBlocks}
               messagesEndRef={messagesEndRef}
               setExpandedImage={setExpandedImage}
               API_BASE={API_BASE}
               speakText={speakText}
-              copiedMsgId={copiedMsgId}
               handleCopyMessage={handleCopyMessage}
               handleRegenerate={handleRegenerate}
-              isRegenerating={isRegenerating}
-              pinnedMemories={pinnedMemories}
-              setPinnedMemories={setPinnedMemories}
-              visionBuffer={visionBuffer}
-              setVisionBuffer={setVisionBuffer}
             />
             <ChatInput
-              isStreaming={isStreaming}
-              input={input}
-              setInput={setInput}
               sendMessage={sendMessage}
-              isListening={isListening}
               startListening={startListening}
               handleStopGeneration={handleStopGeneration}
-              visionBuffer={visionBuffer}
-              setVisionBuffer={setVisionBuffer}
             />
           </>
         )}

@@ -139,7 +139,7 @@ app.post("/api/chat/action/generate-title", async (req, res) => {
     }, [], null, { skipRouting: true });
     res.json({ title: title.trim().replace(/["']/g, "").slice(0, 40) });
   } catch (e) {
-    require('fs').appendFileSync('error_log.txt', new Date().toISOString() + ' Generate Title Error: ' + e.stack + '\n');
+    fs.promises.appendFile('error_log.txt', new Date().toISOString() + ' Generate Title Error: ' + e.stack + '\n').catch(console.error);
     res.status(500).json({ error: e.message });
   }
 });

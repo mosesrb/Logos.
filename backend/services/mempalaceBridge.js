@@ -38,9 +38,10 @@ if (!fs.existsSync(TEMP_CONVOS_DIR))  fs.mkdirSync(TEMP_CONVOS_DIR, { recursive:
  * Execute a mempalace subcommand via Python.
  * @param {string[]} args  e.g. ['search', 'what is the user building', '--wing', 'aria']
  * @param {number}   timeout  ms before we kill the process (default 30s)
+ * @param {string}   stdinPayload optional payload to write to stdin
  * @returns {Promise<{ ok: boolean, stdout: string, stderr: string }>}
  */
-export function runMempalace(args, timeout = 30_000) {
+export function runMempalace(args, timeout = 30_000, stdinPayload = null) {
   return new Promise((resolve) => {
     const fullArgs = ["-m", "mempalace", "--palace", PALACE_DIR, ...args];
     console.log(`🏛️  PALACE: python ${fullArgs.join(" ")}`);
@@ -54,6 +55,11 @@ export function runMempalace(args, timeout = 30_000) {
     let stderr = "";
     proc.stdout.on("data", (d) => { stdout += d.toString(); });
     proc.stderr.on("data", (d) => { stderr += d.toString(); });
+
+    if (stdinPayload) {
+      proc.stdin.write(stdinPayload);
+      proc.stdin.end();
+    }
 
     const timer = setTimeout(() => {
       proc.kill();
@@ -98,25 +104,14 @@ export async function mineConversation(text, wing, agentName = "Nexus") {
   // Sanitise wing name for filesystem
   const safeWing = wing.toLowerCase().replace(/[^a-z0-9_-]/g, "_");
 
-  // Write to a uniquely named temp file inside a per-wing sub-directory
-  const wingTempDir = path.join(TEMP_CONVOS_DIR, safeWing);
-  if (!fs.existsSync(wingTempDir)) fs.mkdirSync(wingTempDir, { recursive: true });
-
-  const filename = `convo_${Date.now()}.txt`;
-  const filePath = path.join(wingTempDir, filename);
-  fs.writeFileSync(filePath, text, "utf8");
-
   try {
     const res = await runMempalace([
-      "mine", wingTempDir,
+      "mine", "-", // "-" signifies read from stdin
       "--mode",  "convos",
       "--wing",  safeWing,
       "--agent", agentName,
       "--extract", "exchange"
-    ], 60_000);
-
-    // Clean up temp file after successful mining
-    if (res.ok && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    ], 60_000, text);
 
     return { ok: res.ok, wing: safeWing, details: res.stdout };
   } catch (e) {

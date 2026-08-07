@@ -1,19 +1,22 @@
 import React from 'react';
 import SolarisIcon from './SolarisIcon';
+import { useStore } from '../store/useStore';
 
 const ChatSidebar = ({
-  sessions = {},
-  currentSession = null,
   selectSession,
   createSession,
   renameSession,
   deleteSession,
-  sessionFiles = [],
   deleteFile,
-  setShowUserProfile,
-  setShowPersonaForge,
-  sidebarWidth
 }) => {
+  const {
+    sessions,
+    currentSession,
+    sessionFiles,
+    sidebarWidth,
+    setShowUserProfile,
+    setShowPersonaForge
+  } = useStore();
   return (
     <aside className="neural-sidebar left-panel glass-panel" aria-label="Session navigation">
       <div className="hardware-header" style={{ background: 'var(--solaris-gold-low)', color: 'var(--solaris-gold)', borderBottom: '1px solid var(--solaris-gold-low)' }}>

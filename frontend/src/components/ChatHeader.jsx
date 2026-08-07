@@ -1,65 +1,69 @@
 import React, { useState } from 'react';
 import SolarisIcon from './SolarisIcon';
 
+import { useStore } from '../store/useStore';
+
 const MODE_GUIDE = [
   { id: 'Normal', label: 'SINGLE_SYNC', desc: 'Standard 1:1 interaction with a single persona.' },
   { id: 'Agent', label: 'AUTONOMOUS_LOOP', desc: 'AXON executes tool-assisted multi-stage reasoning loops.' },
-  { id: 'Debate', label: 'REFUTATION_MODE', desc: 'Personas challenge and refute each other\'s perspectives.' },
-  { id: 'Collaborate', label: 'SYNTHESIS_MODE', desc: 'Personas build constructively on each other\'s ideas.' },
+  { id: 'Debate', label: 'REFUTATION_MODE', desc: "Personas challenge and refute each other's perspectives." },
+  { id: 'Collaborate', label: 'SYNTHESIS_MODE', desc: "Personas build constructively on each other's ideas." },
   { id: 'Parallel', label: 'MULTI_STREAM', desc: 'Ask all personas at once; receive simultaneous but independent answers.' },
   { id: 'Pipeline', label: 'SEQUENTIAL_FILT', desc: 'Sequential processing where output moves through a chain of personas.' },
   { id: 'Scenario', label: 'DYN_SIMULATION', desc: 'Generative environment narration with world-state persistence.' }
 ];
 
 const ChatHeader = ({
-  interactionMode,
-  setInteractionMode,
-  setAgentTerminalActive,
   INTERACTION_MODES = [],
   MODE_DESCRIPTIONS = {},
-  selectedPersonaId,
-  setSelectedPersonaId,
-  personas = [],
-  showModelDropdown,
-  setShowModelDropdown,
-  currentSession,
-  personaMood,
   needsMultiModel,
-  selectedPersonaIds = [],
   togglePersonaSelection,
-  debateTurns,
-  setDebateTurns,
   DEBATE_TURN_OPTIONS = [],
-  judgePersonaId,
-  setJudgePersonaId,
-  showJudgeDropdown,
-  setShowJudgeDropdown,
-  selectedScenarioId,
-  setSelectedScenarioId,
-  scenarios = [],
   openScenarioBuilder,
-  simulationChaos,
-  setSimulationChaos,
   sendMessage,
   handleSnapshot,
   handleEvaluate,
-  isEvaluating,
-  selectedModelSingle,
-  darkMode,
-  setDarkMode,
   isVisionModel,
   handleImageUpload,
-  webMode,
-  setWebMode,
-  ragMode,
-  setRagMode,
-  unrestrictedMode,
-  setUnrestrictedMode,
-  handleFileUpload,
-  uploadStatus,
-  activeView,
-  setActiveView,
+  handleFileUpload
 }) => {
+  const {
+    interactionMode,
+    setInteractionMode,
+    setAgentTerminalActive,
+    selectedPersonaId,
+    setSelectedPersonaId,
+    personas,
+    showModelDropdown,
+    setShowModelDropdown,
+    currentSession,
+    personaMood,
+    selectedPersonaIds,
+    debateTurns,
+    setDebateTurns,
+    judgePersonaId,
+    setJudgePersonaId,
+    showJudgeDropdown,
+    setShowJudgeDropdown,
+    selectedScenarioId,
+    setSelectedScenarioId,
+    scenarios,
+    simulationChaos,
+    setSimulationChaos,
+    isEvaluating,
+    selectedModelSingle,
+    darkMode,
+    setDarkMode,
+    webMode,
+    setWebMode,
+    ragMode,
+    setRagMode,
+    unrestrictedMode,
+    setUnrestrictedMode,
+    uploadStatus,
+    activeView,
+    setActiveView
+  } = useStore();
   const [showModeInfo, setShowModeInfo] = useState(false);
 
   return (
@@ -127,7 +131,7 @@ const ChatHeader = ({
 
         {/* ── MODULE: PERSONA ── */}
         {(interactionMode === "Normal" || interactionMode === "Agent") && (
-          <div className="header-module" style={{ position: "relative" }}>
+          <div className="header-module" style={{ position: "relative", zIndex: (!needsMultiModel && showModelDropdown) ? 50 : 1 }}>
             <span className="module-label">PERSONA</span>
             <div className="control-group">
               <button className="model-picker-btn" onClick={() => setShowModelDropdown((s) => !s)}>
@@ -202,7 +206,7 @@ const ChatHeader = ({
 
         {/* ── MODULE: MULTI-PERSONA (Parallel/Debate/Scenario) ── */}
         {needsMultiModel && (
-          <div className="header-module" style={{ position: "relative" }}>
+          <div className="header-module" style={{ position: "relative", zIndex: (needsMultiModel && showModelDropdown) ? 50 : 1 }}>
             <span className="module-label">PERSONAS</span>
             <div className="control-group">
               <button className="model-picker-btn" onClick={() => setShowModelDropdown((s) => !s)}>
@@ -245,7 +249,7 @@ const ChatHeader = ({
         )}
 
         {interactionMode === "Debate" && (
-          <div className="header-module" style={{ position: "relative" }}>
+          <div className="header-module" style={{ position: "relative", zIndex: showJudgeDropdown ? 50 : 1 }}>
             <span className="module-label">JUDGE_ENTITY</span>
             <div className="control-group">
               <button

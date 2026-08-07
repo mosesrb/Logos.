@@ -8,28 +8,31 @@ const autoFormatText = (text) => {
     // Fix mushed headings: "word. #### Heading" -> "word.\n\n#### Heading"
     .replace(/([^\n])\s*(#{1,4}\s+[A-Z*])/gi, "$1\n\n$2");
 };
+import { useStore } from '../store/useStore';
 
 const ChatInterface = ({
-  currentSession,
-  messages = [],
   getMessageMeta,
-  selectedPersonaId,
-  personaMood,
   speakText,
   handleCopyMessage,
-  copiedMsgId,
   handleRegenerate,
-  isRegenerating,
-  isStreaming,
-  streamingBlocks = [],
   messagesEndRef,
-  pinnedMemories = [],
-  setPinnedMemories,
-  visionBuffer = [],
-  setVisionBuffer,
   API_BASE,
   setExpandedImage
 }) => {
+  const {
+    currentSession,
+    messages,
+    selectedPersonaId,
+    personaMood,
+    copiedMsgId,
+    isRegenerating,
+    isStreaming,
+    streamingBlocks,
+    pinnedMemories,
+    setPinnedMemories,
+    visionBuffer,
+    setVisionBuffer
+  } = useStore();
   if (!currentSession) {
     return (
       <div className="welcome-screen">

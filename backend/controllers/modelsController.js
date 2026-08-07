@@ -5,7 +5,7 @@ import { getSystemStats, modelMetricsStore } from "../services/systemService.js"
 import { getModelRegistry } from "../modelRouter.js";
 
 export function setupModelsRoutes(app, context) {
-  const { UTILITY_MODEL, getActiveHeavyModels } = context;
+  const { UTILITY_MODEL } = context;
 
   app.get("/api/models", async (req, res) => {
     try {
@@ -61,7 +61,6 @@ export function setupModelsRoutes(app, context) {
       res.json({
         ...stats,
         modelMetrics: modelMetricsStore.snapshot(), // T6: per-model perf
-        activeHeavyModels: getActiveHeavyModels(),  // T8: concurrency monitor
         modelRegistry: getModelRegistry(),          // T1: expose registry to UI
       });
     } catch (err) {
@@ -70,7 +69,6 @@ export function setupModelsRoutes(app, context) {
         cpu: 0, ram: 0, vram: 0, 
         details: { memTotal: "0GB", memUsed: "0GB", gpuName: "N/A" },
         modelMetrics: {},
-        activeHeavyModels: 0,
         modelRegistry: { models: [] }
       });
     }

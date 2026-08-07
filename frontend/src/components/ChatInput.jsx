@@ -1,16 +1,20 @@
 import React, { useRef, useState } from 'react';
 
+import { useStore } from '../store/useStore';
+
 const ChatInput = ({
-  input,
-  setInput,
-  isStreaming = false,
-  isListening = false,
   startListening,
   sendMessage,
-  handleStopGeneration,
-  visionBuffer = [],
-  setVisionBuffer
+  handleStopGeneration
 }) => {
+  const {
+    input,
+    setInput,
+    isStreaming,
+    isListening,
+    visionBuffer,
+    setVisionBuffer
+  } = useStore();
   const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
 
