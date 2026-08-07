@@ -15,3 +15,8 @@
   - Switched to asynchronous logging (`fs.promises.appendFile`) to prevent blocking the Node.js event loop during high-throughput parallel AI interactions.
   - Implemented strict structured payload parsing utilizing `jsonrepair` via `parseCleanAnswer` to fix LLM hallucinations on JSON format modes.
 - **Code Quality**: Enforced codebase-wide ESLint targeting modern JavaScript/React best practices. Extinguished duplicate global concurrency logic (`activeHeavyModels`) and transitioned seamlessly into localized asynchronous queue handlers.
+- **Audit Remediation & Hardening (Phase 1-4)**:
+  - Eliminated path traversal vulnerabilities via URL decoding handling in file access tools.
+  - Implemented UI state optimization utilizing `useShallow` for Zustand selectors to minimize re-renders.
+  - Hardened Docker configurations by transitioning to `nginx-unprivileged` for rootless execution.
+  - Resolved UI stacking context and data filtering issues in the Persona Dropdown, ensuring Multi-Agent modes correctly map availability and display empty states gracefully.

@@ -12,16 +12,7 @@ import { llmProvider } from "./llm/index.js";
 import { parseCleanAnswer } from "../utils/textUtils.js";
 import { updateRelationship, tagAndStoreMemory } from "../ai/memoryUpdater.js";
 
-// Helper for streaming to client. Note: It's copied from chatController to keep services decoupled
-async function fakeStreamChunked(res, content, metaObj) {
-  const chunks = content.match(/.{1,10}/g) || [content];
-  for (const chunk of chunks) {
-    if (chunk) {
-      res.write(`data: ${JSON.stringify({ ...metaObj, content: chunk })}\n\n`);
-    }
-    await new Promise(r => setTimeout(r, 10));
-  }
-}
+
 
 export async function executePipeline({
   res, sessionId, prompt, personaIds, webMode, ragMode, images, pinnedMemories,
@@ -86,9 +77,10 @@ export async function executePipeline({
     const systemPrompt = buildPersonaSystemPrompt(persona, sessionId);
     let modelBuf = "";
     try {
-      const rawOutput = await llmProvider.runModel(model, stagePrompt, null, images, systemPrompt, { skipRouting: true });
+      const rawOutput = await llmProvider.runModel(model, stagePrompt, (chunk) => {
+          res.write(`data: ${JSON.stringify({ type: "pipeline-stage-chunk", model, role: roleName, personaId: persona?.id, content: chunk })}\n\n`);
+      }, images, systemPrompt, { skipRouting: true });
       modelBuf = parseCleanAnswer(rawOutput);
-      await fakeStreamChunked(res, modelBuf, { type: "pipeline-stage-chunk", model, role: roleName, personaId: persona?.id });
     } catch (e) {
       modelBuf += ` [Error: ${e.message}]`;
       res.write(`data: ${JSON.stringify({ type: "pipeline-stage-chunk", model, role: roleName, content: ` [Error: ${e.message}]`, personaId: persona?.id })}\n\n`);

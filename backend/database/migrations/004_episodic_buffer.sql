@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS EpisodicBuffer (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    persona_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    text TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

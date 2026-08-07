@@ -1,5 +1,6 @@
 import { useStore } from './store/useStore.js';
-import React, { useEffect, useRef, useState } from "react";
+import { useShallow } from 'zustand/react/shallow';
+import React, { useEffect, useRef, useState, Suspense, lazy } from "react";
 import { apiFetch } from "./services/apiClient";
 import "./index.css";
 
@@ -13,12 +14,14 @@ import PersonaForge from './components/Modals/PersonaForge.jsx';
 import ScenarioBuilder from './components/Modals/ScenarioBuilder.jsx';
 import UserProfile from './components/Modals/UserProfile.jsx';
 import NarrativeEvaluation from './components/Modals/NarrativeEvaluation.jsx';
-import TerminalHub from './components/TerminalHub.jsx';
-import SystemHUD from './components/SystemHUD.jsx';
-import MetricsPanel from './components/MetricsPanel.jsx';
-import IcarusToolBelt from './components/IcarusToolBelt.jsx';
-import NeuralDatabaseManager from './components/NeuralDatabaseManager.jsx';
-import AgentDesk from './components/AgentDesk.jsx';
+
+// Lazy-loaded heavy components
+const TerminalHub = lazy(() => import('./components/TerminalHub.jsx'));
+const SystemHUD = lazy(() => import('./components/SystemHUD.jsx'));
+const MetricsPanel = lazy(() => import('./components/MetricsPanel.jsx'));
+const IcarusToolBelt = lazy(() => import('./components/IcarusToolBelt.jsx'));
+const NeuralDatabaseManager = lazy(() => import('./components/NeuralDatabaseManager.jsx'));
+const AgentDesk = lazy(() => import('./components/AgentDesk.jsx'));
 
 
 const INTERACTION_MODES = ["Normal", "Agent", "Parallel", "Debate", "Collaborate", "Pipeline", "Scenario"];
@@ -38,13 +41,13 @@ export default function App() {
   const API = `${API_BASE}/api`;
 
   const {
+
     sessions,
     setSessions,
     currentSession,
     setCurrentSession,
     messages,
     setMessages,
-    input,
     setInput,
     models,
     setModels,
@@ -182,64 +185,154 @@ export default function App() {
     setShowDbManager,
     logs,
     setLogs
-  } = useStore();
+  
+  } = useStore(useShallow(state => ({
+    sessions: state.sessions,
+    setSessions: state.setSessions,
+    currentSession: state.currentSession,
+    setCurrentSession: state.setCurrentSession,
+    messages: state.messages,
+    setMessages: state.setMessages,
+    setInput: state.setInput,
+    models: state.models,
+    setModels: state.setModels,
+    selectedPersonaIds: state.selectedPersonaIds,
+    setSelectedPersonaIds: state.setSelectedPersonaIds,
+    selectedModelSingle: state.selectedModelSingle,
+    setSelectedModelSingle: state.setSelectedModelSingle,
+    interactionMode: state.interactionMode,
+    setInteractionMode: state.setInteractionMode,
+    isAgentTerminalActive: state.isAgentTerminalActive,
+    setAgentTerminalActive: state.setAgentTerminalActive,
+    activeView: state.activeView,
+    setActiveView: state.setActiveView,
+    webMode: state.webMode,
+    setWebMode: state.setWebMode,
+    ragMode: state.ragMode,
+    setRagMode: state.setRagMode,
+    unrestrictedMode: state.unrestrictedMode,
+    setUnrestrictedMode: state.setUnrestrictedMode,
+    selectedNode: state.selectedNode,
+    setSelectedNode: state.setSelectedNode,
+    editNodeText: state.editNodeText,
+    setEditNodeText: state.setEditNodeText,
+    isSyncingMemory: state.isSyncingMemory,
+    setIsSyncingMemory: state.setIsSyncingMemory,
+    darkMode: state.darkMode,
+    setDarkMode: state.setDarkMode,
+    sidebarWidth: state.sidebarWidth,
+    setSidebarWidth: state.setSidebarWidth,
+    diagnosticsWidth: state.diagnosticsWidth,
+    setDiagnosticsWidth: state.setDiagnosticsWidth,
+    lastUserMessage: state.lastUserMessage,
+    setLastUserMessage: state.setLastUserMessage,
+    copiedMsgId: state.copiedMsgId,
+    setCopiedMsgId: state.setCopiedMsgId,
+    isRegenerating: state.isRegenerating,
+    setIsRegenerating: state.setIsRegenerating,
+    showModelDropdown: state.showModelDropdown,
+    setShowModelDropdown: state.setShowModelDropdown,
+    showJudgeDropdown: state.showJudgeDropdown,
+    setShowJudgeDropdown: state.setShowJudgeDropdown,
+    uploadStatus: state.uploadStatus,
+    setUploadStatus: state.setUploadStatus,
+    debateTurns: state.debateTurns,
+    setDebateTurns: state.setDebateTurns,
+    judgePersonaId: state.judgePersonaId,
+    setJudgePersonaId: state.setJudgePersonaId,
+    isStreaming: state.isStreaming,
+    setIsStreaming: state.setIsStreaming,
+    streamingBlocks: state.streamingBlocks,
+    setStreamingBlocks: state.setStreamingBlocks,
+    terminalLogs: state.terminalLogs,
+    setTerminalLogs: state.setTerminalLogs,
+    sessionFiles: state.sessionFiles,
+    setSessionFiles: state.setSessionFiles,
+    pipelineStatus: state.pipelineStatus,
+    setPipelineStatus: state.setPipelineStatus,
+    metrics: state.metrics,
+    setMetrics: state.setMetrics,
+    sysStats: state.sysStats,
+    setSysStats: state.setSysStats,
+    scrollLock: state.scrollLock,
+    setScrollLock: state.setScrollLock,
+    visionBuffer: state.visionBuffer,
+    setVisionBuffer: state.setVisionBuffer,
+    isListening: state.isListening,
+    setIsListening: state.setIsListening,
+    activeTerminalTab: state.activeTerminalTab,
+    setActiveTerminalTab: state.setActiveTerminalTab,
+    synapsePreset: state.synapsePreset,
+    setSynapsePreset: state.setSynapsePreset,
+    synapsePresets: state.synapsePresets,
+    setSynapsePresets: state.setSynapsePresets,
+    autoRead: state.autoRead,
+    setAutoRead: state.setAutoRead,
+    selectedVoice: state.selectedVoice,
+    setSelectedVoice: state.setSelectedVoice,
+    personas: state.personas,
+    setPersonas: state.setPersonas,
+    selectedPersonaId: state.selectedPersonaId,
+    setSelectedPersonaId: state.setSelectedPersonaId,
+    personaMap: state.personaMap,
+    setPersonaMap: state.setPersonaMap,
+    scenarios: state.scenarios,
+    setScenarios: state.setScenarios,
+    selectedScenarioId: state.selectedScenarioId,
+    setSelectedScenarioId: state.setSelectedScenarioId,
+    showPersonaForge: state.showPersonaForge,
+    setShowPersonaForge: state.setShowPersonaForge,
+    editingPersona: state.editingPersona,
+    setEditingPersona: state.setEditingPersona,
+    forgeTab: state.forgeTab,
+    setForgeTab: state.setForgeTab,
+    moodHistory: state.moodHistory,
+    setMoodHistory: state.setMoodHistory,
+    heatmapEnabled: state.heatmapEnabled,
+    setHeatmapEnabled: state.setHeatmapEnabled,
+    showUserProfile: state.showUserProfile,
+    setShowUserProfile: state.setShowUserProfile,
+    personaMood: state.personaMood,
+    setPersonaMood: state.setPersonaMood,
+    pendingTrigger: state.pendingTrigger,
+    setPendingTrigger: state.setPendingTrigger,
+    showScenarioBuilder: state.showScenarioBuilder,
+    setShowScenarioBuilder: state.setShowScenarioBuilder,
+    editingScenario: state.editingScenario,
+    setEditingScenario: state.setEditingScenario,
+    hiddenIntents: state.hiddenIntents,
+    setHiddenIntents: state.setHiddenIntents,
+    roleModelMap: state.roleModelMap,
+    setRoleModelMap: state.setRoleModelMap,
+    evaluation: state.evaluation,
+    setEvaluation: state.setEvaluation,
+    isEvaluating: state.isEvaluating,
+    setIsEvaluating: state.setIsEvaluating,
+    forgeSaveStatus: state.forgeSaveStatus,
+    setForgeSaveStatus: state.setForgeSaveStatus,
+    simulationChaos: state.simulationChaos,
+    setSimulationChaos: state.setSimulationChaos,
+    vectorNodes: state.vectorNodes,
+    setVectorNodes: state.setVectorNodes,
+    pinnedMemories: state.pinnedMemories,
+    setPinnedMemories: state.setPinnedMemories,
+    expandedImage: state.expandedImage,
+    setExpandedImage: state.setExpandedImage,
+    mapTransform: state.mapTransform,
+    setMapTransform: state.setMapTransform,
+    isDraggingMap: state.isDraggingMap,
+    setIsDraggingMap: state.setIsDraggingMap,
+    dragStart: state.dragStart,
+    setDragStart: state.setDragStart,
+    mapHasMoved: state.mapHasMoved,
+    setMapHasMoved: state.setMapHasMoved,
+    showDbManager: state.showDbManager,
+    setShowDbManager: state.setShowDbManager,
+    logs: state.logs,
+    setLogs: state.setLogs
+  })));
 
 
-  // const [sessions, setSessions] = useState([]);
-  // const [currentSession, setCurrentSession] = useState(null);
-  // const [messages, setMessages] = useState([]);
-  // const [input, setInput] = useState("");
-  // const [models, setModels] = useState([]);
-  // const [selectedPersonaIds, setSelectedPersonaIds] = useState([]);
-  // const [selectedModelSingle, setSelectedModelSingle] = useState(undefined);
-  // const [interactionMode, setInteractionMode] = useState("Normal");
-  // const [isAgentTerminalActive, setAgentTerminalActive] = useState(false);
-  // const [activeView, setActiveView] = useState('chat'); // 'chat' | 'agent-desk'
-  // const [webMode, setWebMode] = useState(false);
-  // const [ragMode, setRagMode] = useState(false);
-  // const [unrestrictedMode, setUnrestrictedMode] = useState(false);
-  // Phase 25: Memory Editing
-  // const [selectedNode, setSelectedNode] = useState(null);
-  // const [editNodeText, setEditNodeText] = useState("");
-  // const [isSyncingMemory, setIsSyncingMemory] = useState(false);
-  // Phase 26: Parthenope features
-  // const [darkMode, setDarkMode] = useState(() => localStorage.getItem('parthenope_dark') === 'true');
-  // const [sidebarWidth, setSidebarWidth] = useState(() => parseInt(localStorage.getItem('parthenope_sidebar_w') || '240'));
-  // const [diagnosticsWidth, setDiagnosticsWidth] = useState(() => parseInt(localStorage.getItem('parthenope_diag_w') || '360'));
-  // const [lastUserMessage, setLastUserMessage] = useState(null);
-  // const [copiedMsgId, setCopiedMsgId] = useState(null);
-  // const [isRegenerating, setIsRegenerating] = useState(false);
-  // const [showModelDropdown, setShowModelDropdown] = useState(false);
-  // const [showJudgeDropdown, setShowJudgeDropdown] = useState(false);
-  // const [uploadStatus, setUploadStatus] = useState("");
-  // const [debateTurns, setDebateTurns] = useState(2);
-  // const [judgePersonaId, setJudgePersonaId] = useState("");
-  // const [isStreaming, setIsStreaming] = useState(false);
-  // const [streamingBlocks, setStreamingBlocks] = useState([]);
-  // const [terminalLogs, setTerminalLogs] = useState([]);
-  // const [sessionFiles, setSessionFiles] = useState([]);
-  // const [pipelineStatus, setPipelineStatus] = useState(null); // { stage: string, total: number, current: number }
-  // const [metrics, setMetrics] = useState({ latency: 0, tokens: 0, vram: "0GB", tps: 0 });
-  // const [sysStats, setSysStats] = useState({ cpu: 0, ram: 0, vram: 0, details: {} });
-  // const [scrollLock, setScrollLock] = useState(true);
-  // const [visionBuffer, setVisionBuffer] = useState([]); // Array of base64 strings
-  // const [isListening, setIsListening] = useState(false);
-  // const [activeTerminalTab, setActiveTerminalTab] = useState("LOGS");
-  // const [synapsePreset, setSynapsePreset] = useState("code-review");
-  // const [synapsePresets, setSynapsePresets] = useState([]);
-  // const [autoRead, setAutoRead] = useState(false);
-  // const [selectedVoice, setSelectedVoice] = useState("male_us");
-  // const [personas, setPersonas] = useState([]);
-  // const [selectedPersonaId, setSelectedPersonaId] = useState("");
-  // const [personaMap, setPersonaMap] = useState({}); // { [modelName]: personaId }
-  // const [scenarios, setScenarios] = useState([]);
-  // const [selectedScenarioId, setSelectedScenarioId] = useState("");
-  // const [showPersonaForge, setShowPersonaForge] = useState(false);
-  // const [editingPersona, setEditingPersona] = useState(null);
-  // const [forgeTab, setForgeTab] = useState("settings"); // "settings" | "history"
-  // const [moodHistory, setMoodHistory] = useState([]);
-  // const [heatmapEnabled, setHeatmapEnabled] = useState(false);
-  // const [showUserProfile, setShowUserProfile] = useState(false); // Phase 14
   const [userPersona, setUserPersona] = useState({
     profile: { communication_style: "balanced", prefers_depth: true, tone_preference: "neutral" },
     goals: []
@@ -261,10 +354,6 @@ export default function App() {
     imageRetrieval: true,
     availableModes: ["Normal", "Parallel", "Debate", "Collaborate", "Pipeline", "Scenario"]
   });
-  // const [personaMood, setPersonaMood] = useState(null); // Phase 18
-  // const [pendingTrigger, setPendingTrigger] = useState(null); // Phase 19
-  // const [showScenarioBuilder, setShowScenarioBuilder] = useState(false);
-  // const [editingScenario, setEditingScenario] = useState(null);
   const [forgeScenarioData, setForgeScenarioData] = useState({
     name: "",
     description: "",
@@ -276,24 +365,8 @@ export default function App() {
     rag_mode: false,
     unrestricted_mode: false
   });
-  // const [hiddenIntents, setHiddenIntents] = useState({}); // { [role]: "agenda" }
-  // const [roleModelMap, setRoleModelMap] = useState({}); // { [role]: "model" }
-  // const [evaluation, setEvaluation] = useState(null); // { fidelity, progression, anomalies, synopsis }
-  // const [isEvaluating, setIsEvaluating] = useState(false);
-  // const [forgeSaveStatus, setForgeSaveStatus] = useState("idle");
-  // const [simulationChaos, setSimulationChaos] = useState(1.0);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  // LOGS or NEURAL_MAP
-  // const [vectorNodes, setVectorNodes] = useState([]);
-  // const [pinnedMemories, setPinnedMemories] = useState([]);
-  // const [expandedImage, setExpandedImage] = useState(null);
-  // const [mapTransform, setMapTransform] = useState({ x: 0, y: 0, k: 1 });
-  // const [isDraggingMap, setIsDraggingMap] = useState(false);
-  // const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  // const [mapHasMoved, setMapHasMoved] = useState(false);
-  // const [showDbManager, setShowDbManager] = useState(false);
-  // const [logs, setLogs] = useState([]);
   const messagesEndRef = useRef(null);
   const terminalEndRef = useRef(null);
   const lastLoadedSessionId = useRef(null);
@@ -1031,7 +1104,7 @@ export default function App() {
 
   // ─── Send Message Controller ───
   const sendMessage = async (overridePrompt = null, isSpontaneous = false) => {
-    const text = (overridePrompt || input).trim();
+    const text = (overridePrompt || useStore.getState().input).trim();
     const hasVision = visionBuffer.length > 0;
 
     if ((!text && !hasVision) || !currentSession || isStreaming) return;
@@ -1039,7 +1112,7 @@ export default function App() {
     if (!isSpontaneous) {
       pushLocalMessage({ role: "user", content: text, time: new Date().toISOString() });
       setLastUserMessage({ content: text, time: new Date().toISOString() }); // Phase 26
-      setInput("");
+      useStore.getState().setInput("");
     } else {
       addLog(`SPONTANEOUS_TRIGGER: ${text.slice(0, 30)}...`, "sys");
     }
@@ -1137,7 +1210,7 @@ export default function App() {
             const { value, done } = await reader.read();
             if (done) break;
             
-            lastDataTime = Date.now(); // Update heartbeat
+            let lastDataTime = Date.now(); // Update heartbeat
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split("\n");
             
@@ -1560,8 +1633,6 @@ export default function App() {
     setSelectedPersonaIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
-  // Stale model selection functions removed (Persona-centric refactor)
-
   // ─── Scenario ───
   async function handleScenario(prompt) {
     if (!selectedScenarioId) return;
@@ -1860,13 +1931,15 @@ export default function App() {
 
         {/* ─── Main View: Chat or Agent Desk ─── */}
         {activeView === 'agent-desk' ? (
-          <AgentDesk
-            personas={personas}
-            API={API}
-            darkMode={darkMode}
-            onExit={() => setActiveView('chat')}
-            activeSession={currentSession}
-          />
+          <Suspense fallback={<div className="loading-fallback">LOADING_AGENT_DESK...</div>}>
+            <AgentDesk
+              personas={personas}
+              API={API}
+              darkMode={darkMode}
+              onExit={() => setActiveView('chat')}
+              activeSession={currentSession}
+            />
+          </Suspense>
         ) : (
           <>
             <ChatInterface

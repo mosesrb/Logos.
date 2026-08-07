@@ -16,6 +16,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import { fileURLToPath } from "url";
+import readline from "readline";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -33,45 +34,67 @@ const TEMP_CONVOS_DIR = path.join(PALACE_DIR, "_temp_convos");
 if (!fs.existsSync(PALACE_DIR))       fs.mkdirSync(PALACE_DIR, { recursive: true });
 if (!fs.existsSync(TEMP_CONVOS_DIR))  fs.mkdirSync(TEMP_CONVOS_DIR, { recursive: true });
 
-// ─── Core runner ─────────────────────────────────────────────────────────────
-/**
- * Execute a mempalace subcommand via Python.
- * @param {string[]} args  e.g. ['search', 'what is the user building', '--wing', 'aria']
- * @param {number}   timeout  ms before we kill the process (default 30s)
- * @param {string}   stdinPayload optional payload to write to stdin
- * @returns {Promise<{ ok: boolean, stdout: string, stderr: string }>}
- */
+let daemonProc = null;
+let requestQueue = [];
+
+function getDaemon() {
+  if (daemonProc) return daemonProc;
+  console.log("🏛️  PALACE: Starting persistent Python daemon...");
+  daemonProc = spawn("python", ["daemon.py"], {
+    cwd: __dirname,
+    env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" }
+  });
+  
+  const rl = readline.createInterface({ input: daemonProc.stdout });
+  rl.on('line', (line) => {
+    if (!line.trim()) return;
+    try {
+      const res = JSON.parse(line);
+      const req = requestQueue.shift();
+      if (req) {
+        clearTimeout(req.timer);
+        req.resolve(res);
+      }
+    } catch (e) {
+      console.warn("🏛️  PALACE unparseable output:", line);
+    }
+  });
+  
+  daemonProc.stderr.on('data', (d) => {
+    console.warn(`🏛️  PALACE DAEMON ERR: ${d.toString()}`);
+  });
+  
+  daemonProc.on('close', () => {
+    daemonProc = null;
+    requestQueue.forEach(req => req.resolve({ ok: false, error: "Daemon closed", stderr: "Daemon closed", stdout: "" }));
+    requestQueue = [];
+  });
+  
+  return daemonProc;
+}
+
 export function runMempalace(args, timeout = 30_000, stdinPayload = null) {
   return new Promise((resolve) => {
-    const fullArgs = ["-m", "mempalace", "--palace", PALACE_DIR, ...args];
-    console.log(`🏛️  PALACE: python ${fullArgs.join(" ")}`);
-
-    const proc = spawn("python", fullArgs, {
-      cwd: path.resolve(__dirname, ".."),
-      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" }
-    });
-
-    let stdout = "";
-    let stderr = "";
-    proc.stdout.on("data", (d) => { stdout += d.toString(); });
-    proc.stderr.on("data", (d) => { stderr += d.toString(); });
-
-    if (stdinPayload) {
-      proc.stdin.write(stdinPayload);
-      proc.stdin.end();
+    const proc = getDaemon();
+    
+    let timer;
+    if (timeout > 0) {
+      timer = setTimeout(() => {
+        const idx = requestQueue.findIndex(r => r.timer === timer);
+        if (idx !== -1) requestQueue.splice(idx, 1);
+        resolve({ ok: false, stderr: `[TIMEOUT after ${timeout}ms]`, stdout: "" });
+      }, timeout);
     }
-
-    const timer = setTimeout(() => {
-      proc.kill();
-      resolve({ ok: false, stdout, stderr: `[TIMEOUT after ${timeout}ms]` });
-    }, timeout);
-
-    proc.on("close", (code) => {
-      clearTimeout(timer);
-      const ok = code === 0;
-      if (!ok) console.warn(`🏛️  PALACE warn (exit ${code}): ${stderr.trim().slice(0, 200)}`);
-      resolve({ ok, stdout: stdout.trim(), stderr: stderr.trim() });
+    
+    requestQueue.push({ resolve, timer });
+    
+    // Format message and ensure no newlines inside JSON structure break readline
+    const msg = JSON.stringify({
+      args: ["--palace", PALACE_DIR, ...args],
+      stdinPayload: stdinPayload
     });
+    
+    proc.stdin.write(msg + "\\n");
   });
 }
 

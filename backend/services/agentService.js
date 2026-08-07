@@ -1,10 +1,11 @@
 import fetch from "node-fetch";
-import { agentToolsSchema, ToolRegistry } from "../utils/tools.js";
+import { agentToolsSchema, ToolRegistry, validateToolArgs } from "../utils/tools.js";
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 
 import capabilityService from "./capabilityService.js";
 import * as dbService from "./dbService.js";
+import { withExponentialBackoff } from "./systemService.js";
 
 // OLLAMA_BASE_URL is handled via process.env
 
@@ -25,9 +26,12 @@ export async function executeAgenticTask(res, agentModel, systemPrompt, initialU
     console.log(`🤖 AGENT_SERVICE: Starting task for session [${sessionId}] with [${history.length}] context messages`);
     
     let isAborted = false;
+    const abortController = new AbortController();
+
     res.on("close", () => {
         console.log("🤖 AGENT_SERVICE: Connection closed by client. Aborting loop.");
         isAborted = true;
+        abortController.abort();
     });
 
     const messages = [
@@ -88,28 +92,35 @@ export async function executeAgenticTask(res, agentModel, systemPrompt, initialU
 
             let response;
             try {
-                response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(requestPayload)
-                });
+                response = await withExponentialBackoff(async () => {
+                    const res = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(requestPayload),
+                        signal: abortController.signal
+                    });
+                    
+                    if (!res.ok) {
+                        const errorBody = await res.text();
+                        if (res.status === 400) {
+                            const err = new Error(`Ollama API returned 400: ${errorBody}`);
+                            err.status = 400; // Do not retry
+                            throw err;
+                        }
+                        throw new Error(`Ollama API returned ${res.status}: ${errorBody}`);
+                    }
+                    return res;
+                }, 3, 1000);
+            } catch (fetchErr) {
+                if (fetchErr.status === 400 && (fetchErr.message.includes("tools") || fetchErr.message.includes("not support"))) {
+                    throw new Error(`Model [${agentModel}] does not support autonomous tools. Recommended: qwen2.5-coder or llama3.1.`);
+                }
+                throw fetchErr;
             } finally {
                 clearInterval(heartbeat);
             }
 
             if (isAborted) return; // Exit if aborted during fetch
-
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.error(`🤖 AGENT_ERROR: Ollama returned ${response.status} - ${errorBody}`);
-                
-                // Specialized Model Guardrail
-                if (response.status === 400 && (errorBody.includes("tools") || errorBody.includes("not support"))) {
-                    throw new Error(`Model [${agentModel}] does not support autonomous tools. Recommended: qwen2.5-coder or llama3.1.`);
-                }
-                
-                throw new Error(`Ollama API returned ${response.status} ${response.statusText}: ${errorBody}`);
-            }
 
             const data = await response.json();
             const msg = data.message;
@@ -134,7 +145,18 @@ export async function executeAgenticTask(res, agentModel, systemPrompt, initialU
                             ? JSON.parse(call.function.arguments) 
                             : call.function.arguments;
                     } catch (e) {
-                        funcArgs = {};
+                        res.write(`data: ${JSON.stringify({ 
+                            type: "agent-tool-result", 
+                            tool: funcName, 
+                            result: { success: false, error: `Invalid JSON in tool arguments: ${e.message}` } 
+                        })}\n\n`);
+                        
+                        messages.push({
+                            role: "tool",
+                            content: JSON.stringify({ success: false, error: `Invalid JSON in tool arguments: ${e.message}` }),
+                            tool_call_id: callId 
+                        });
+                        continue;
                     }
                     
                     // Alert Frontend Terminal
@@ -153,11 +175,17 @@ export async function executeAgenticTask(res, agentModel, systemPrompt, initialU
                     if (!allowedTools.has(funcName)) {
                         result = { success: false, error: `Tool ${funcName} is not authorized for this session.` };
                     } else if (executor) {
-                        try {
-                            result = await executor({ ...funcArgs, sessionId });
-                            isSuccess = result.success ? 1 : 0;
-                        } catch (err) {
-                            result = { success: false, error: err.message };
+                        // Validate arguments against JSON schema
+                        const validation = validateToolArgs(funcName, funcArgs);
+                        if (!validation.valid) {
+                            result = { success: false, error: `Invalid arguments: ${validation.error}` };
+                        } else {
+                            try {
+                                result = await executor({ ...funcArgs, sessionId });
+                                isSuccess = result.success ? 1 : 0;
+                            } catch (err) {
+                                result = { success: false, error: err.message };
+                            }
                         }
                     } else {
                         result = { success: false, error: `Tool ${funcName} not found mapped in system.` };

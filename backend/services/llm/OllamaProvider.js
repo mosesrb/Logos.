@@ -6,6 +6,31 @@ if (typeof global.modelMetrics === 'undefined') {
   global.modelMetrics = {};
 }
 
+function capMessages(messages, maxTokens = 6000) {
+  if (!messages || !Array.isArray(messages)) return messages;
+  const maxChars = maxTokens * 4; // Approx 4 chars per token
+  let currentChars = 0;
+  
+  const systemMessages = messages.filter(m => m.role === "system");
+  const otherMessages = messages.filter(m => m.role !== "system");
+  const cappedOther = [];
+  
+  for (const sys of systemMessages) currentChars += (sys.content || "").length;
+  
+  for (let i = otherMessages.length - 1; i >= 0; i--) {
+    const msg = otherMessages[i];
+    // If it has tool calls, we shouldn't slice it easily, but we approximate length
+    const contentLen = (msg.content || "").length + JSON.stringify(msg.tool_calls || []).length;
+    if (currentChars + contentLen > maxChars && cappedOther.length > 0) {
+        break; // Stop adding older historical messages
+    }
+    cappedOther.unshift(msg);
+    currentChars += contentLen;
+  }
+  
+  return [...systemMessages, ...cappedOther];
+}
+
 export class OllamaProvider extends BaseProvider {
   constructor(baseUrl = null) {
     super();
@@ -16,6 +41,14 @@ export class OllamaProvider extends BaseProvider {
    * Helper to execute Ollama fetch stream
    */
   async _executeStream(payload, onChunkCallback) {
+    const { StringDecoder } = await import('string_decoder');
+    const decoder = new StringDecoder('utf8');
+    
+    // Enforce token limit context window capping
+    if (payload.messages) {
+      payload.messages = capMessages(payload.messages, 6000);
+    }
+
     const res = await fetch(`${this.baseUrl}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -29,7 +62,7 @@ export class OllamaProvider extends BaseProvider {
 
     try {
       for await (const chunk of res.body) {
-        lineBuffer += Buffer.from(chunk).toString("utf-8");
+        lineBuffer += decoder.write(chunk);
         const lines = lineBuffer.split("\n");
         lineBuffer = lines.pop(); // keep remainder
 
@@ -49,6 +82,7 @@ export class OllamaProvider extends BaseProvider {
         }
       }
       
+      lineBuffer += decoder.end();
       if (lineBuffer.trim()) {
         try {
           const json = JSON.parse(lineBuffer);
@@ -98,7 +132,7 @@ export class OllamaProvider extends BaseProvider {
 
     const payload = { 
       model: routedModel, 
-      messages, 
+      messages: capMessages(messages, 6000), 
       stream: false,
       format: schema ? schema : "json" // Use native JSON output if schema or just "json" format
     };

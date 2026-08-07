@@ -32,9 +32,9 @@ const UserProfile = ({
   return (
     <FocusTrap focusTrapOptions={{ initialFocus: false, escapeDeactivates: false, clickOutsideDeactivates: false, fallbackFocus: '.modal-content' }}>
       <div className="modal-overlay">
-      <div className="modal-content glass-panel" role="dialog" aria-modal="true" aria-label="User cognitive profile" style={{ maxWidth: '500px' }}>
+      <div className="modal-content glass-panel" role="dialog" aria-modal="true" aria-labelledby="user-profile-title" style={{ maxWidth: '500px' }}>
         <div className="modal-header">
-          <h2>👤 Your Cognitive Profile</h2>
+          <h2 id="user-profile-title">👤 Your Cognitive Profile</h2>
           <button type="button" aria-label="Close" className="close-btn" onClick={() => setShowUserProfile(false)}>×</button>
         </div>
         <div className="forge-form">

@@ -30,7 +30,7 @@ const PersonaForge = ({
   return (
     <FocusTrap focusTrapOptions={{ initialFocus: false, escapeDeactivates: false, clickOutsideDeactivates: false, fallbackFocus: '.modal-content' }}>
       <div className="modal-overlay">
-      <div className="modal-content forge-modal manager-overhaul" role="dialog" aria-modal="true" aria-label="Persona manager">
+      <div className="modal-content forge-modal manager-overhaul" role="dialog" aria-modal="true" aria-labelledby="persona-forge-title">
         <div className="hardware-header">
           <span>PERSONA_MANAGER_v3</span>
           <span className="hardware-id">UNIT: BRAIN-GEN-04</span>
@@ -75,7 +75,7 @@ const PersonaForge = ({
           {/* --- EDITOR MAIN --- */}
           <main className="forge-editor">
             <div className="modal-header">
-              <h2>{editingPersona ? `🔧 ${editingPersona.name}` : "🔨 Forge New Persona"}</h2>
+              <h2 id="persona-forge-title">{editingPersona ? `🔧 ${editingPersona.name}` : "🔨 Forge New Persona"}</h2>
               <div className="modal-tabs">
                 <button className={`nav-tab ${forgeTab === 'settings' ? 'active' : ''}`} onClick={() => setForgeTab('settings')}>IDENTITY_CORE</button>
                 {editingPersona && (

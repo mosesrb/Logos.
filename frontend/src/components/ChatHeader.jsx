@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import SolarisIcon from './SolarisIcon';
 
 import { useStore } from '../store/useStore';
+import { useShallow } from 'zustand/react/shallow';
 
 const MODE_GUIDE = [
   { id: 'Normal', label: 'SINGLE_SYNC', desc: 'Standard 1:1 interaction with a single persona.' },
@@ -63,14 +64,50 @@ const ChatHeader = ({
     uploadStatus,
     activeView,
     setActiveView
-  } = useStore();
+  } = useStore(useShallow(state => ({
+    interactionMode: state.interactionMode,
+    setInteractionMode: state.setInteractionMode,
+    setAgentTerminalActive: state.setAgentTerminalActive,
+    selectedPersonaId: state.selectedPersonaId,
+    setSelectedPersonaId: state.setSelectedPersonaId,
+    personas: state.personas,
+    showModelDropdown: state.showModelDropdown,
+    setShowModelDropdown: state.setShowModelDropdown,
+    currentSession: state.currentSession,
+    personaMood: state.personaMood,
+    selectedPersonaIds: state.selectedPersonaIds,
+    debateTurns: state.debateTurns,
+    setDebateTurns: state.setDebateTurns,
+    judgePersonaId: state.judgePersonaId,
+    setJudgePersonaId: state.setJudgePersonaId,
+    showJudgeDropdown: state.showJudgeDropdown,
+    setShowJudgeDropdown: state.setShowJudgeDropdown,
+    selectedScenarioId: state.selectedScenarioId,
+    setSelectedScenarioId: state.setSelectedScenarioId,
+    scenarios: state.scenarios,
+    simulationChaos: state.simulationChaos,
+    setSimulationChaos: state.setSimulationChaos,
+    isEvaluating: state.isEvaluating,
+    selectedModelSingle: state.selectedModelSingle,
+    darkMode: state.darkMode,
+    setDarkMode: state.setDarkMode,
+    webMode: state.webMode,
+    setWebMode: state.setWebMode,
+    ragMode: state.ragMode,
+    setRagMode: state.setRagMode,
+    unrestrictedMode: state.unrestrictedMode,
+    setUnrestrictedMode: state.setUnrestrictedMode,
+    uploadStatus: state.uploadStatus,
+    activeView: state.activeView,
+    setActiveView: state.setActiveView
+  })));
   const [showModeInfo, setShowModeInfo] = useState(false);
 
   return (
     <div className="chat-header glass-panel">
-      <div className="header-row">
+      <div className="header-row" style={{ position: 'relative', zIndex: 10 }}>
         {/* ── MODULE: SESSION ── */}
-        <div className="header-module" style={{ position: 'relative' }}>
+        <div className="header-module" style={{ position: 'relative', zIndex: showModeInfo ? 50 : 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span className="module-label">SESSION</span>
             <span 
@@ -148,14 +185,22 @@ const ChatHeader = ({
                   >
                     — None —
                   </div>
-                  {personas
-                    .filter(p => {
+                  {(() => {
+                    const filtered = personas.filter(p => {
                       if (!p.availableModes || p.availableModes.length === 0) return true;
                       // Agent mode uses Normal-mode personas (legacy personas don't have "Agent" in their list)
                       const checkMode = interactionMode === 'Agent' ? 'Normal' : interactionMode;
                       return p.availableModes.includes(interactionMode) || p.availableModes.includes(checkMode);
-                    })
-                    .map((p) => (
+                    });
+                    
+                    if (personas.length === 0) {
+                      return <div className="dim p-2" style={{fontSize: '12px', textAlign: 'center'}}>No personas found. Create one!</div>;
+                    }
+                    if (filtered.length === 0) {
+                      return <div className="dim p-2" style={{fontSize: '12px', textAlign: 'center', opacity: 0.7}}>No personas available for this mode.<br/>Edit a persona to enable it here.</div>;
+                    }
+                    
+                    return filtered.map((p) => (
                       <div
                         key={p.id}
                         className={`model-dropdown-item${selectedPersonaId === p.id ? ' active' : ''}`}
@@ -163,9 +208,8 @@ const ChatHeader = ({
                       >
                         {p.name}
                       </div>
-                    ))
-                  }
-                  {personas.length === 0 && <div className="dim p-2">No personas found. Create one!</div>}
+                    ));
+                  })()}
                 </div>
               )}
             </div>
@@ -215,19 +259,26 @@ const ChatHeader = ({
               </button>
               {showModelDropdown && (
                 <div className="model-dropdown glass-panel">
-                  {personas
-                    .filter(p => {
+                  {(() => {
+                    const filtered = personas.filter(p => {
                       if (!p.availableModes || p.availableModes.length === 0) return true;
                       const checkMode = interactionMode === 'Agent' ? 'Normal' : interactionMode;
                       return p.availableModes.includes(interactionMode) || p.availableModes.includes(checkMode);
-                    })
-                    .map((p) => (
+                    });
+                    
+                    if (personas.length === 0) {
+                      return <div className="dim p-2" style={{fontSize: '12px', textAlign: 'center'}}>No personas found. Create one!</div>;
+                    }
+                    if (filtered.length === 0) {
+                      return <div className="dim p-2" style={{fontSize: '12px', textAlign: 'center', opacity: 0.7}}>No personas available for this mode.<br/>Edit a persona to enable it here.</div>;
+                    }
+                    
+                    return filtered.map((p) => (
                       <label key={p.id} className={`model-dropdown-item${selectedPersonaIds.includes(p.id) ? ' active' : ''}`}>
                         <input type="checkbox" checked={selectedPersonaIds.includes(p.id)} onChange={() => togglePersonaSelection(p.id)} /> {p.name}
                       </label>
-                    ))
-                  }
-                  {personas.length === 0 && <div className="dim p-2">No personas found. Create one!</div>}
+                    ));
+                  })()}
                 </div>
               )}
             </div>

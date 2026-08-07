@@ -29,9 +29,11 @@
 ### 5. Modular Architecture & DevOps
 - **Backend Controllers & Providers**: Deep decoupling of models with `BaseProvider` and `OllamaProvider`.
 - **Testing & Containerization**: Robust testing suite powered by Vitest & Jest, automated via GitHub Actions (`.github/workflows/test.yml`).
-- **Hardened Security**: Implemented strict jail boundaries and path sanitization for all agentic filesystem tools, alongside heuristic blocks for Prompt Injection / Jailbreak attacks.
+- **Docker Hardening**: Migrated to rootless `nginx-unprivileged` containers for enhanced runtime security.
+- **Hardened Security**: Implemented strict jail boundaries and path sanitization (preventing URL-encoded directory traversal) for all agentic filesystem tools, alongside heuristic blocks for Prompt Injection / Jailbreak attacks.
 - **Code Quality**: Enforced standardized linting across the stack using `eslint.config.mjs` running Node.js and React recommended rules.
 - **Concurrent Database Operations**: SQLite runs in WAL mode to handle parallel AI generation and UI requests safely, managed cleanly via `AsyncQueue`.
+- **Frontend State Optimization**: Enforced `useShallow` for Zustand selector logic and optimized stacking contexts (z-index and filtered data rendering) to ensure high-performance UI rendering across multi-agent modes.
 
 ## 🛠️ Work in Progress / Active Development
 

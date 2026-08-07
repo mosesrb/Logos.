@@ -1,6 +1,9 @@
 import React from 'react';
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Virtuoso } from 'react-virtuoso';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 const autoFormatText = (text) => {
   if (!text) return text;
@@ -8,7 +11,43 @@ const autoFormatText = (text) => {
     // Fix mushed headings: "word. #### Heading" -> "word.\n\n#### Heading"
     .replace(/([^\n])\s*(#{1,4}\s+[A-Z*])/gi, "$1\n\n$2");
 };
+
+const CodeBlock = ({ node, inline, className, children, ...props }) => {
+  const match = /language-(\w+)/.exec(className || '');
+  const lang = match ? match[1] : '';
+  const [copied, setCopied] = React.useState(false);
+  const handleCopy = (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(String(children).replace(/\n$/, ''));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  
+  if (!inline && match) {
+    return (
+      <div className="code-block-container" style={{ position: 'relative', marginTop: '10px', marginBottom: '10px', borderRadius: '4px', overflow: 'hidden' }}>
+        <div className="code-block-header" style={{ display: 'flex', justifyContent: 'space-between', background: '#1e1e1e', padding: '4px 12px', borderBottom: '1px solid #333', fontSize: '0.8rem', color: '#888' }}>
+          <span>{lang}</span>
+          <button onClick={handleCopy} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer' }}>
+            {copied ? '✓ Copied' : '📋 Copy'}
+          </button>
+        </div>
+        <SyntaxHighlighter
+          style={vscDarkPlus}
+          language={lang}
+          PreTag="div"
+          customStyle={{ margin: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}
+          {...props}
+        >
+          {String(children).replace(/\n$/, '')}
+        </SyntaxHighlighter>
+      </div>
+    );
+  }
+  return <code className={className} {...props}>{children}</code>;
+};
 import { useStore } from '../store/useStore';
+import { useShallow } from 'zustand/react/shallow';
 
 const ChatInterface = ({
   getMessageMeta,
@@ -20,6 +59,7 @@ const ChatInterface = ({
   setExpandedImage
 }) => {
   const {
+
     currentSession,
     messages,
     selectedPersonaId,
@@ -32,7 +72,21 @@ const ChatInterface = ({
     setPinnedMemories,
     visionBuffer,
     setVisionBuffer
-  } = useStore();
+  
+  } = useStore(useShallow(state => ({
+    currentSession: state.currentSession,
+    messages: state.messages,
+    selectedPersonaId: state.selectedPersonaId,
+    personaMood: state.personaMood,
+    copiedMsgId: state.copiedMsgId,
+    isRegenerating: state.isRegenerating,
+    isStreaming: state.isStreaming,
+    streamingBlocks: state.streamingBlocks,
+    pinnedMemories: state.pinnedMemories,
+    setPinnedMemories: state.setPinnedMemories,
+    visionBuffer: state.visionBuffer,
+    setVisionBuffer: state.setVisionBuffer
+  })));
   if (!currentSession) {
     return (
       <div className="welcome-screen">
@@ -66,120 +120,137 @@ const ChatInterface = ({
   }
 
   return (
-    <div className="chat-messages">
-      <div className="decal-label" style={{ position: 'absolute', top: 5, left: 10 }}>UNIT_01 // SECURE_COMM_LINK</div>
-      <div className="decal-label" style={{ position: 'absolute', top: 5, right: 10 }}>REF: CHRONOS-EXT-02</div>
-      {messages.map((m, i) => {
-        const meta = getMessageMeta(m);
-        const isCurrentPersona = m.personaId === selectedPersonaId;
-        const auraStyle = (isCurrentPersona && personaMood) ? {
-          '--mood-h': Math.max(0, (personaMood.valence + 1) * 60),
-          '--mood-s': personaMood.arousal * 100 + '%',
-          '--mood-l': 40 + (personaMood.arousal * 20) + '%',
-          '--mood-v': personaMood.valence,
-          '--mood-a': personaMood.arousal
-        } : {};
+    <div className="chat-messages" style={{ padding: 0, overflow: 'hidden' }}>
+      <Virtuoso
+        style={{ flex: 1, width: '100%', height: '100%' }}
+        data={messages}
+        initialTopMostItemIndex={messages.length - 1}
+        followOutput={(isAtBottom) => isAtBottom ? "auto" : false}
+        components={{
+          Header: () => (
+            <>
+              <div className="decal-label" style={{ position: 'absolute', top: 5, left: 10 }}>UNIT_01 // SECURE_COMM_LINK</div>
+              <div className="decal-label" style={{ position: 'absolute', top: 5, right: 10 }}>REF: CHRONOS-EXT-02</div>
+              <div style={{ height: '40px' }} />
+            </>
+          ),
+          Footer: () => (
+            <div style={{ padding: '0 40px 40px 40px' }}>
+              {isStreaming && streamingBlocks.map((block, i) => {
+                const auraStyle = (block.personaId === selectedPersonaId && personaMood) ? {
+                  '--mood-h': Math.max(0, (personaMood.valence + 1) * 60),
+                  '--mood-s': personaMood.arousal * 100 + '%',
+                  '--mood-l': 40 + (personaMood.arousal * 20) + '%',
+                  '--thinking-speed': (1.5 - personaMood.arousal) + 's'
+                } : { '--thinking-speed': '1.5s' };
 
-        return (
-          <div
-            key={i}
-            className={`message ${meta.css} ${isCurrentPersona && personaMood ? 'mood-aura' : ''}`}
-            style={auraStyle}
-          >
-            <div className="msg-header">
-              <span className="msg-role">{meta.label}</span>
-              <div className="msg-actions">
-                {m.role === "assistant" && (
-                  <button className="msg-action-btn" onClick={() => speakText(m.content, m.personaId)}>🔊</button>
-                )}
-                <button
-                  className={`msg-action-btn${copiedMsgId === i ? ' copied' : ''}`}
-                  onClick={() => handleCopyMessage(m.content, i)}
-                  title="Copy message"
-                >
-                  {copiedMsgId === i ? '✓' : '📋'}
-                </button>
-                {(m.role === "assistant" || m.role?.startsWith('assistant-')) && (
-                  <button
-                    className="msg-action-btn regen-btn"
-                    onClick={handleRegenerate}
-                    disabled={isRegenerating}
-                    title="Regenerate response"
-                  >
-                    {isRegenerating ? '⌛' : '↺'}
-                  </button>
-                )}
-                <span className="msg-time">
-                  {new Date(m.time || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </span>
-              </div>
-            </div>
-            <div className="msg-body">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  img: ({ node, ...props }) => {
-                    const src = props.src.startsWith("/") ? `${API_BASE}${props.src}` : props.src;
-                    return (
-                      <div className="msg-image-container" onClick={() => setExpandedImage(src)}>
-                        <img {...props} src={src} className="chat-image-modern" />
-                        <div className="image-overlay-hint">CLICK_TO_EXPAND</div>
-                      </div>
-                    );
-                  }
-                }}
-              >
-                {autoFormatText(m.content)}
-              </ReactMarkdown>
-            </div>
-            {m.sources && m.sources.length > 0 && (
-              <div className="msg-sources">
-                <div className="sources-label">SOURCE_NODES:</div>
-                <div className="sources-list">
-                  {m.sources.map((src, idx) => (
-                    <div key={idx} className="source-badge" title={src}>
-                      {src.split(/[/\\]/).pop()}
+                return (
+                  <div key={`stream-${i}`} className={`message ai assistant-msg ${block.personaId === selectedPersonaId && personaMood ? 'mood-aura' : ''}`} style={auraStyle}>
+                    <div className="msg-header">
+                      <span className="msg-role">{(block.label || "AI").toUpperCase()}//</span>
+                      <span className="streaming-dot">●</span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
+                    <div className="msg-body thinking" style={{ animationDuration: 'var(--thinking-speed)' }}>
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          code: CodeBlock,
+                          img: ({ node, ...props }) => <img {...props} className="chat-image-modern" />
+                        }}
+                      >
+                        {autoFormatText(block.content)}
+                      </ReactMarkdown>
+                      <span className="cursor"></span>
+                    </div>
+                  </div>
+                );
+              })}
 
-      {/* Live streaming blocks */}
-      {isStreaming && streamingBlocks.map((block, i) => {
-        const auraStyle = (block.personaId === selectedPersonaId && personaMood) ? {
-          '--mood-h': Math.max(0, (personaMood.valence + 1) * 60),
-          '--mood-s': personaMood.arousal * 100 + '%',
-          '--mood-l': 40 + (personaMood.arousal * 20) + '%',
-          '--thinking-speed': (1.5 - personaMood.arousal) + 's'
-        } : { '--thinking-speed': '1.5s' };
-
-        return (
-          <div key={`stream-${i}`} className={`message ai assistant-msg ${block.personaId === selectedPersonaId && personaMood ? 'mood-aura' : ''}`} style={auraStyle}>
-            <div className="msg-header">
-              <span className="msg-role">{(block.label || "AI").toUpperCase()}//</span>
-              <span className="streaming-dot">●</span>
+              {messagesEndRef && <div ref={messagesEndRef} />}
             </div>
-            <div className="msg-body thinking" style={{ animationDuration: 'var(--thinking-speed)' }}>
-              <ReactMarkdown 
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  img: ({ node, ...props }) => <img {...props} className="chat-image-modern" />
-                }}
+          )
+        }}
+        itemContent={(i, m) => {
+          const meta = getMessageMeta(m);
+          const isCurrentPersona = m.personaId === selectedPersonaId;
+          const auraStyle = (isCurrentPersona && personaMood) ? {
+            '--mood-h': Math.max(0, (personaMood.valence + 1) * 60),
+            '--mood-s': personaMood.arousal * 100 + '%',
+            '--mood-l': 40 + (personaMood.arousal * 20) + '%',
+            '--mood-v': personaMood.valence,
+            '--mood-a': personaMood.arousal
+          } : {};
+
+          return (
+            <div style={{ padding: '0 40px' }}>
+              <div
+                className={`message ${meta.css} ${isCurrentPersona && personaMood ? 'mood-aura' : ''}`}
+                style={auraStyle}
               >
-                {autoFormatText(block.content)}
-              </ReactMarkdown>
-              <span className="cursor"></span>
+                <div className="msg-header">
+                  <span className="msg-role">{meta.label}</span>
+                  <div className="msg-actions">
+                    {m.role === "assistant" && (
+                      <button className="msg-action-btn" onClick={() => speakText(m.content, m.personaId)}>🔊</button>
+                    )}
+                    <button
+                      className={`msg-action-btn${copiedMsgId === i ? ' copied' : ''}`}
+                      onClick={() => handleCopyMessage(m.content, i)}
+                      title="Copy message"
+                    >
+                      {copiedMsgId === i ? '✓' : '📋'}
+                    </button>
+                    {(m.role === "assistant" || m.role?.startsWith('assistant-')) && (
+                      <button
+                        className="msg-action-btn regen-btn"
+                        onClick={handleRegenerate}
+                        disabled={isRegenerating}
+                        title="Regenerate response"
+                      >
+                        {isRegenerating ? '⌛' : '↺'}
+                      </button>
+                    )}
+                    <span className="msg-time">
+                      {new Date(m.time || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                </div>
+                <div className="msg-body">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      code: CodeBlock,
+                      img: ({ node, ...props }) => {
+                        const src = props.src.startsWith("/") ? `${API_BASE}${props.src}` : props.src;
+                        return (
+                          <div className="msg-image-container" onClick={() => setExpandedImage(src)}>
+                            <img {...props} src={src} className="chat-image-modern" />
+                            <div className="image-overlay-hint">CLICK_TO_EXPAND</div>
+                          </div>
+                        );
+                      }
+                    }}
+                  >
+                    {autoFormatText(m.content)}
+                  </ReactMarkdown>
+                </div>
+                {m.sources && m.sources.length > 0 && (
+                  <div className="msg-sources">
+                    <div className="sources-label">SOURCE_NODES:</div>
+                    <div className="sources-list">
+                      {m.sources.map((src, idx) => (
+                        <div key={idx} className="source-badge" title={src}>
+                          {src.split(/[/\\]/).pop()}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })}
-
-      {/* Final check for HUDs and overlays */}
-      {messagesEndRef && <div ref={messagesEndRef} />}
+          );
+        }}
+      />
 
       {/* Pinned Memories HUD */}
       {pinnedMemories.length > 0 && (

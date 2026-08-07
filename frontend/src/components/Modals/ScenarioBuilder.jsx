@@ -18,9 +18,9 @@ const ScenarioBuilder = ({
   return (
     <FocusTrap focusTrapOptions={{ initialFocus: false, escapeDeactivates: false, clickOutsideDeactivates: false, fallbackFocus: '.modal-content' }}>
       <div className="modal-overlay">
-      <div className="modal-content forge-modal" role="dialog" aria-modal="true" aria-label="Scenario builder">
+      <div className="modal-content forge-modal" role="dialog" aria-modal="true" aria-labelledby="scenario-builder-title">
         <div className="modal-header">
-          <h2>{editingScenario ? "🔧 Modify Simulation" : "🚀 Architect Scenario"}</h2>
+          <h2 id="scenario-builder-title">{editingScenario ? "🔧 Modify Simulation" : "🚀 Architect Scenario"}</h2>
           <button type="button" aria-label="Close" className="close-btn" onClick={() => setShowScenarioBuilder(false)}>×</button>
         </div>
         <div className="forge-form">

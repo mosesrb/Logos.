@@ -222,6 +222,16 @@ describe('agentWriteFile', () => {
     expect(result.error).toContain('Security Exception: Invalid session scope');
   });
 
+  it('prevents directory traversal attacks via unicode encoding bypass', async () => {
+    const result = await agentWriteFile({
+      filename: '%c0%af%c0%afwindows%c0%afsystem32%c0%afcmd.exe',
+      content: 'test',
+      sessionId: 'test-session-123'
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Security Exception: Path traversal detected');
+  });
+
   it('allows writing a file in the agent sandbox', async () => {
     const result = await agentWriteFile({
       filename: 'test.json',

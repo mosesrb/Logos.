@@ -1,6 +1,7 @@
 import React from 'react';
 import SolarisIcon from './SolarisIcon';
 import { useStore } from '../store/useStore';
+import { useShallow } from 'zustand/react/shallow';
 
 const ChatSidebar = ({
   selectSession,
@@ -10,13 +11,22 @@ const ChatSidebar = ({
   deleteFile,
 }) => {
   const {
+
     sessions,
     currentSession,
     sessionFiles,
     sidebarWidth,
     setShowUserProfile,
     setShowPersonaForge
-  } = useStore();
+  
+  } = useStore(useShallow(state => ({
+    sessions: state.sessions,
+    currentSession: state.currentSession,
+    sessionFiles: state.sessionFiles,
+    sidebarWidth: state.sidebarWidth,
+    setShowUserProfile: state.setShowUserProfile,
+    setShowPersonaForge: state.setShowPersonaForge
+  })));
   return (
     <aside className="neural-sidebar left-panel glass-panel" aria-label="Session navigation">
       <div className="hardware-header" style={{ background: 'var(--solaris-gold-low)', color: 'var(--solaris-gold)', borderBottom: '1px solid var(--solaris-gold-low)' }}>

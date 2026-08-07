@@ -15,4 +15,5 @@ RUN mkdir -p /app/database /app/data /app/uploads /app/sessions /app/models /app
 
 EXPOSE 3008
 
+USER node
 CMD ["npm", "start"]

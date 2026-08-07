@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 
 import { useStore } from '../store/useStore';
+import { useShallow } from 'zustand/react/shallow';
 
 const ChatInput = ({
   startListening,
@@ -8,13 +9,22 @@ const ChatInput = ({
   handleStopGeneration
 }) => {
   const {
+
     input,
     setInput,
     isStreaming,
     isListening,
     visionBuffer,
     setVisionBuffer
-  } = useStore();
+  
+  } = useStore(useShallow(state => ({
+    input: state.input,
+    setInput: state.setInput,
+    isStreaming: state.isStreaming,
+    isListening: state.isListening,
+    visionBuffer: state.visionBuffer,
+    setVisionBuffer: state.setVisionBuffer
+  })));
   const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
 

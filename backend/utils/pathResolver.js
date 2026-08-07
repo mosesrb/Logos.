@@ -17,6 +17,16 @@ export function resolveSafePath(baseDir, userInput) {
     throw new Error("resolveSafePath requires a valid userInput string");
   }
 
+  // Defend against URL-encoded path traversal (e.g. %c0%af for / or %2e%2e for ..)
+  if (userInput.includes('%')) {
+    try {
+      userInput = decodeURIComponent(userInput);
+    } catch (e) {
+      // If it's a malformed URI sequence (like overlong UTF-8 %c0%af), it's highly suspicious.
+      throw new Error(`Security Exception: Path traversal detected. ${userInput}`);
+    }
+  }
+
   const resolved = path.resolve(baseDir, userInput);
   const relative = path.relative(baseDir, resolved);
 

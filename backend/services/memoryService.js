@@ -27,42 +27,52 @@ export let globalMemory = [];
 const mempalaceBuffer = {};
 
 import { llmProvider } from "./llm/index.js";
+import { runQuery, getQuery } from "./dbService.js";
 
 export async function indexEpisodicMemory(sessionId, role, text, mood = null, personaId = "assistant") {
   if (!text || text.trim().length < 10) return;
   console.log(`🧠 MEMORY_INDEX: [${personaId}] role=${role} len=${text.length}`);
   
   const slug = toWingSlug(personaId);
-  if (!mempalaceBuffer[slug]) mempalaceBuffer[slug] = [];
-  
   const formattedRole = role === "user" ? "User" : "Assistant";
-  mempalaceBuffer[slug].push(`${formattedRole}: ${text}`);
+  const formattedText = `${formattedRole}: ${text}`;
   
-  // To keep latency low, we buffer turns and flush them to MemPalace every 4 messages
-  if (mempalaceBuffer[slug].length >= 4) {
-    const convoText = mempalaceBuffer[slug].join("\n");
-    mempalaceBuffer[slug] = []; // Clear buffer immediately
+  try {
+    await runQuery(`INSERT INTO EpisodicBuffer (persona_id, session_id, role, text) VALUES (?, ?, ?, ?)`, [slug, sessionId, role, formattedText]);
     
-    // Fire and forget, but summarize if the text is huge to prevent context overload
-    (async () => {
-      try {
-        let textToMine = convoText;
-        if (convoText.length > 2000) {
-          console.log(`🧠 MEMORY_INDEX: Summarizing large context block (${convoText.length} chars) before indexing...`);
-          const systemPrompt = "You are an expert archivist. Summarize the following conversation chunk, keeping all critical facts, entities, decisions, and relationships intact. Be concise.";
-          const summary = await llmProvider.runModel("default", "Summarize this:\n\n" + convoText, null, [], systemPrompt, { skipRouting: true });
-          if (summary && summary.trim().length > 0) {
-            textToMine = summary;
+    const rows = await getQuery(`SELECT * FROM EpisodicBuffer WHERE persona_id = ? ORDER BY created_at ASC`, [slug]);
+    
+    if (rows.length >= 4) {
+      const convoText = rows.map(r => r.text).join("\n");
+      const idsToDelete = rows.map(r => r.id);
+      
+      // Clear buffer in DB immediately to prevent concurrent duplicate mining
+      const placeholders = idsToDelete.map(() => '?').join(',');
+      await runQuery(`DELETE FROM EpisodicBuffer WHERE id IN (${placeholders})`, idsToDelete);
+      
+      // Fire and forget, but summarize if the text is huge to prevent context overload
+      (async () => {
+        try {
+          let textToMine = convoText;
+          if (convoText.length > 2000) {
+            console.log(`🧠 MEMORY_INDEX: Summarizing large context block (${convoText.length} chars) before indexing...`);
+            const systemPrompt = "You are an expert archivist. Summarize the following conversation chunk, keeping all critical facts, entities, decisions, and relationships intact. Be concise.";
+            const summary = await llmProvider.runModel("default", "Summarize this:\n\n" + convoText, null, [], systemPrompt, { skipRouting: true });
+            if (summary && summary.trim().length > 0) {
+              textToMine = summary;
+            }
           }
+          
+          const res = await mineConversation(textToMine, slug, "Nexus");
+          if (res.ok) console.log(`🏛️ MEMPALACE: Indexed turns into wing [${slug}]`);
+          else console.error(`🏛️ MEMPALACE Error for [${slug}]:`, res.error || res.stderr);
+        } catch (err) {
+          console.error(`🏛️ MEMPALACE Exception for [${slug}]:`, err);
         }
-        
-        const res = await mineConversation(textToMine, slug, "Nexus");
-        if (res.ok) console.log(`🏛️ MEMPALACE: Indexed turns into wing [${slug}]`);
-        else console.error(`🏛️ MEMPALACE Error for [${slug}]:`, res.error);
-      } catch (err) {
-        console.error(`🏛️ MEMPALACE Exception for [${slug}]:`, err);
-      }
-    })();
+      })();
+    }
+  } catch (err) {
+    console.error("❌ MEMORY_INDEX Error inserting/buffering episodic memory:", err);
   }
 }
 

@@ -122,7 +122,7 @@ export async function syncPersona(p) {
         model: p.model || "",
         voice: p.voice || "",
         // Mode availability
-        availableModes: p.availableModes || ["Normal"],
+        availableModes: p.availableModes || ["Normal", "Agent", "Parallel", "Debate", "Collaborate", "Pipeline", "Scenario"],
         // Extended profile fields (previously lost on DB round-trip)
         core_expertise: p.core_expertise || "",
         personality_style: p.personality_style || "",

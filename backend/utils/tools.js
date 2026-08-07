@@ -233,3 +233,38 @@ export const ToolRegistry = {
     "agentWriteFile": agentWriteFile
 };
 
+export function validateToolArgs(funcName, args) {
+    const spec = agentToolsSchema.find(t => t.function.name === funcName);
+    if (!spec) return { valid: false, error: `Tool ${funcName} not found in schema.` };
+    
+    const params = spec.function.parameters;
+    if (!params) return { valid: true };
+    
+    if (params.required) {
+        for (const req of params.required) {
+            if (args[req] === undefined || args[req] === null) {
+                return { valid: false, error: `Missing required parameter: ${req}` };
+            }
+        }
+    }
+    
+    if (params.properties) {
+        for (const [key, value] of Object.entries(args)) {
+            const propSpec = params.properties[key];
+            if (propSpec) {
+                if (propSpec.type === "string" && typeof value !== "string") {
+                    return { valid: false, error: `Parameter '${key}' must be a string.` };
+                }
+                if (propSpec.type === "number" && typeof value !== "number") {
+                    return { valid: false, error: `Parameter '${key}' must be a number.` };
+                }
+                if (propSpec.type === "boolean" && typeof value !== "boolean") {
+                    return { valid: false, error: `Parameter '${key}' must be a boolean.` };
+                }
+            }
+        }
+    }
+    
+    return { valid: true };
+}
+

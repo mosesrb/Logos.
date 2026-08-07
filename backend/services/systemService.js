@@ -31,6 +31,28 @@ function withTimeout(promise, ms, defaultValue) {
 }
 
 /**
+ * Executes a promise-returning function with exponential backoff retries.
+ * Use this for network operations like LLM fetch calls.
+ */
+export async function withExponentialBackoff(fn, maxRetries = 3, baseDelayMs = 1000) {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      return await fn();
+    } catch (error) {
+      attempt++;
+      // Don't retry if the error has a status property of 400 (Client Error)
+      if (attempt >= maxRetries || error.status === 400) {
+        throw error;
+      }
+      const delay = baseDelayMs * Math.pow(2, attempt - 1);
+      console.log(`⏳ [Exponential Backoff] Retrying in ${delay}ms... (Attempt ${attempt}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
+/**
  * Gather CPU, RAM, and VRAM stats using isolated, timeout-guarded probes.
  * @returns {Promise<{cpu: number, ram: number, vram: number, details: object}>}
  */
@@ -52,7 +74,8 @@ export async function getSystemStats() {
   // Prefer nvidia-smi for accurate VRAM on Windows, but guard it heavily
   try {
     const nvidiaPromise = execAsync(
-      "nvidia-smi --query-gpu=memory.total,memory.used --format=csv,noheader,nounits"
+      "nvidia-smi --query-gpu=memory.total,memory.used --format=csv,noheader,nounits",
+      { timeout: 2000 }
     );
     const { stdout } = await withTimeout(nvidiaPromise, 2000, { stdout: "" });
     
